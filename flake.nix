@@ -39,7 +39,6 @@
 
           postInstall = ''
             wrapProgram $out/bin/${pname} --prefix PATH : ${lib.makeBinPath buildInputs}
-            ln -rsf $out/bin/${pname} $out/bin/hx
           '';
         };
       in
