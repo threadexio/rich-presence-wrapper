@@ -7,9 +7,7 @@ use thiserror::Error;
 
 pub use discord_presence::models::Activity;
 
-use crate::util::{hash, SystemTimeExt};
-
-const MAX_MISSED_UPDATES: usize = 2;
+use crate::util::SystemTimeExt;
 
 pub trait ActivityBuilder {
     type Error;
@@ -35,14 +33,8 @@ pub enum UpdateError<A> {
     Activity(A),
 }
 
-struct Inner {
-    rpc: Client,
-    missed_updates: usize,
-    last_activity_hash: Option<u64>,
-}
-
 pub struct Rpc {
-    inner: Option<Inner>,
+    rpc: Option<Client>,
     start: SystemTime,
 }
 
@@ -50,11 +42,11 @@ impl Rpc {
     pub fn new() -> Self {
         let start = SystemTime::now();
 
-        Self { inner: None, start }
+        Self { rpc: None, start }
     }
 
     pub fn connect(&mut self, id: u64) -> Result<(), ConnectError> {
-        if self.inner.is_some() {
+        if self.rpc.is_some() {
             return Err(ConnectError::AlreadyConnected);
         }
 
@@ -71,12 +63,7 @@ impl Rpc {
         rpc.start();
         ready.wait();
 
-        self.inner = Some(Inner {
-            rpc,
-            missed_updates: 0,
-            last_activity_hash: None,
-        });
-
+        self.rpc = Some(rpc);
         Ok(())
     }
 
@@ -84,7 +71,7 @@ impl Rpc {
     where
         A: ActivityBuilder,
     {
-        let Some(ref mut inner) = self.inner else {
+        let Some(ref mut rpc) = self.rpc else {
             return Err(UpdateError::NotConnected);
         };
 
@@ -92,32 +79,11 @@ impl Rpc {
             .build(Activity::new())
             .map_err(UpdateError::Activity)?;
 
-        let hash = hash(&activity);
+        rpc.set_activity(|_| {
+            activity.timestamps(|x| x.start(self.start.duration_since_epoch().as_secs()))
+        })
+        .map_err(UpdateError::Rpc)?;
 
-        match inner.last_activity_hash {
-            Some(x) if x != hash => self.do_update(activity).map_err(UpdateError::Rpc),
-            Some(_) if inner.missed_updates >= MAX_MISSED_UPDATES => {
-                self.do_update(activity).map_err(UpdateError::Rpc)
-            }
-            Some(_) => {
-                inner.missed_updates += 1;
-                Ok(())
-            }
-            None => {
-                inner.last_activity_hash = Some(hash);
-                self.do_update(activity).map_err(UpdateError::Rpc)
-            }
-        }
-    }
-
-    fn do_update(&mut self, activity: Activity) -> Result<(), DiscordError> {
-        let inner = self.inner.as_mut().unwrap();
-
-        inner
-            .rpc
-            .set_activity(|_| {
-                activity.timestamps(|x| x.start(self.start.duration_since_epoch().as_secs()))
-            })
-            .map(|_| ())
+        Ok(())
     }
 }

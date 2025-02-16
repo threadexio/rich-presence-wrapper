@@ -1,5 +1,4 @@
 use std::ffi::{OsStr, OsString};
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -28,12 +27,6 @@ pub fn strip_home_dir(path: &Path) -> Option<&Path> {
 
     let home = HOME_DIR.get_or_init(dirs::home_dir).as_deref()?;
     path.strip_prefix(home).ok()
-}
-
-pub fn hash<T: Hash>(value: &T) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    value.hash(&mut hasher);
-    hasher.finish()
 }
 
 pub fn env<K, V>(var: K, default: impl FnOnce() -> V) -> OsString
