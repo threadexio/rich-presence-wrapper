@@ -12,41 +12,33 @@
   };
 
   outputs = { nixpkgs, flake-utils, rust-overlay, ... }:
+    let
+      mkPkgs = system: import nixpkgs {
+        inherit system;
+        overlays = [
+          (import rust-overlay)
+
+          (final: _: {
+            rustToolchain = final.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+          })
+
+          (final: _: {
+            helix-rich-presence = final.callPackage ./nix/package.nix { };
+          })
+        ];
+      };
+    in
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = import nixpkgs {
-          inherit system;
-          overlays = [ (import rust-overlay) ];
-        };
-
-        lib = pkgs.lib;
-
-        rustVersion = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-        rustPlatform = pkgs.makeRustPlatform {
-          cargo = rustVersion;
-          rustc = rustVersion;
-        };
-
-        helix-rich-presence = rustPlatform.buildRustPackage rec {
-          pname = "helix-rich-presence";
-          version = "0.1.0";
-          src = ./.;
-
-          buildInputs = with pkgs; [ helix ];
-          nativeBuildInputs = with pkgs; [ makeWrapper ];
-
-          cargoLock.lockFile = ./Cargo.lock;
-
-          postInstall = ''
-            wrapProgram $out/bin/${pname} --prefix PATH : ${lib.makeBinPath buildInputs}
-          '';
-        };
+        pkgs = mkPkgs system;
       in
       {
-        packages.default = helix-rich-presence;
+        formatter = pkgs.nixpkgs-fmt;
+
+        packages.default = pkgs.helix-rich-presence;
 
         apps.default = flake-utils.lib.mkApp {
-          drv = helix-rich-presence;
+          drv = pkgs.helix-rich-presence;
           name = "hx";
         };
       }
