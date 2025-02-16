@@ -37,6 +37,15 @@
 
         packages.default = pkgs.helix-rich-presence;
 
+        devShells.default = pkgs.mkShell {
+          packages = with pkgs; [
+            rustToolchain
+            helix
+          ];
+
+          env.HELIX = "${pkgs.helix}/bin/hx";
+        };
+
         apps.default = flake-utils.lib.mkApp {
           drv = pkgs.helix-rich-presence;
           name = "hx";
