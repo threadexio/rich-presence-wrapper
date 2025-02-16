@@ -1,25 +1,9 @@
 use std::ffi::{OsStr, OsString};
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-use tokio::io;
-use tokio::process::Child;
-
-pub trait ChildExt {
-    fn cwd(&self) -> io::Result<PathBuf>;
-}
-
-impl ChildExt for Child {
-    fn cwd(&self) -> io::Result<PathBuf> {
-        let id = self
-            .id()
-            .ok_or_else(|| io::Error::from(io::ErrorKind::BrokenPipe))?;
-
-        std::fs::read_link(format!("/proc/{id}/cwd"))
-    }
-}
 
 pub trait SystemTimeExt {
     fn duration_since_epoch(&self) -> Duration;
@@ -29,6 +13,10 @@ impl SystemTimeExt for SystemTime {
     fn duration_since_epoch(&self) -> Duration {
         self.duration_since(UNIX_EPOCH).unwrap()
     }
+}
+
+pub fn get_process_cwd(id: u32) -> io::Result<PathBuf> {
+    std::fs::read_link(format!("/proc/{id}/cwd"))
 }
 
 pub fn find_repo_root(path: &Path) -> Option<&Path> {

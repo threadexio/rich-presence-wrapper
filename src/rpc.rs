@@ -1,7 +1,5 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::thread::sleep;
-use std::time::{Duration, SystemTime};
+use std::sync::{Arc, Barrier};
+use std::time::SystemTime;
 
 use discord_presence::Client;
 use discord_presence::DiscordError;
@@ -11,6 +9,8 @@ pub use discord_presence::models::Activity;
 
 use crate::util::{hash, SystemTimeExt};
 
+const MAX_MISSED_UPDATES: usize = 2;
+
 pub trait ActivityBuilder {
     type Error;
 
@@ -18,76 +18,103 @@ pub trait ActivityBuilder {
 }
 
 #[derive(Debug, Error)]
-pub enum UpdateError<A>
-where
-    A: ActivityBuilder,
-{
+pub enum ConnectError {
+    #[error("already connected")]
+    AlreadyConnected,
+}
+
+#[derive(Debug, Error)]
+pub enum UpdateError<A> {
+    #[error("not connected")]
+    NotConnected,
+
     #[error(transparent)]
     Rpc(DiscordError),
 
     #[error(transparent)]
-    Activity(A::Error),
+    Activity(A),
 }
 
-pub struct Rpc {
+struct Inner {
     rpc: Client,
-    start: SystemTime,
+    missed_updates: usize,
     last_activity_hash: Option<u64>,
 }
 
+pub struct Rpc {
+    inner: Option<Inner>,
+    start: SystemTime,
+}
+
 impl Rpc {
-    pub async fn new(id: u64) -> Self {
+    pub fn new() -> Self {
         let start = SystemTime::now();
 
-        let rpc = tokio::task::spawn_blocking(move || {
-            let mut rpc = Client::new(id);
-            let ready = Arc::new(AtomicBool::new(false));
-
-            let _ready = rpc.on_ready({
-                let ready = ready.clone();
-                move |_| ready.store(true, Ordering::Relaxed)
-            });
-
-            rpc.start();
-
-            while !ready.load(Ordering::Relaxed) {
-                sleep(Duration::from_secs(1));
-            }
-
-            rpc
-        })
-        .await
-        .unwrap();
-
-        Self {
-            rpc,
-            start,
-            last_activity_hash: None,
-        }
+        Self { inner: None, start }
     }
 
-    pub async fn update<A>(&mut self, builder: &mut A) -> Result<(), UpdateError<A>>
+    pub fn connect(&mut self, id: u64) -> Result<(), ConnectError> {
+        if self.inner.is_some() {
+            return Err(ConnectError::AlreadyConnected);
+        }
+
+        let mut rpc = Client::new(id);
+        let ready = Arc::new(Barrier::new(2));
+
+        let _ready = rpc.on_ready({
+            let ready = ready.clone();
+            move |_| {
+                ready.wait();
+            }
+        });
+
+        rpc.start();
+        ready.wait();
+
+        self.inner = Some(Inner {
+            rpc,
+            missed_updates: 0,
+            last_activity_hash: None,
+        });
+
+        Ok(())
+    }
+
+    pub fn update<A>(&mut self, builder: &mut A) -> Result<(), UpdateError<A::Error>>
     where
         A: ActivityBuilder,
     {
+        let Some(ref mut inner) = self.inner else {
+            return Err(UpdateError::NotConnected);
+        };
+
         let activity = builder
             .build(Activity::new())
             .map_err(UpdateError::Activity)?;
 
         let hash = hash(&activity);
 
-        match self.last_activity_hash {
+        match inner.last_activity_hash {
             Some(x) if x != hash => self.do_update(activity).map_err(UpdateError::Rpc),
-            Some(_) => Ok(()),
+            Some(_) if inner.missed_updates >= MAX_MISSED_UPDATES => {
+                self.do_update(activity).map_err(UpdateError::Rpc)
+            }
+            Some(_) => {
+                inner.missed_updates += 1;
+                Ok(())
+            }
             None => {
-                self.last_activity_hash = Some(hash);
+                inner.last_activity_hash = Some(hash);
                 self.do_update(activity).map_err(UpdateError::Rpc)
             }
         }
     }
 
     fn do_update(&mut self, activity: Activity) -> Result<(), DiscordError> {
-        self.rpc
+        let inner = self.inner.as_mut().unwrap();
+
+        inner
+            .rpc
             .set_activity(|_| {
                 activity.timestamps(|x| x.start(self.start.duration_since_epoch().as_secs()))
             })

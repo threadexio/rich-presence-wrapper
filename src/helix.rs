@@ -1,12 +1,10 @@
 use std::borrow::Cow;
 use std::io;
 use std::path::Path;
-use std::process::Stdio;
-
-use tokio::process::{Child, Command};
+use std::process::{Child, Command, ExitStatus, Stdio};
 
 use crate::rpc::{Activity, ActivityBuilder};
-use crate::util::{find_repo_root, strip_home_dir, ChildExt};
+use crate::util::{find_repo_root, get_process_cwd, strip_home_dir};
 
 pub struct Helix {
     process: Child,
@@ -18,22 +16,31 @@ impl Helix {
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
-            .kill_on_drop(true)
             .spawn()?;
 
         Ok(Self { process })
     }
 
-    pub async fn wait(&mut self) {
-        let _ = self.process.wait().await;
+    pub fn wait(mut self) -> io::Result<ExitStatus> {
+        self.process.wait()
+    }
+
+    pub fn activity_builder(&self) -> HelixActivity {
+        let id = self.process.id();
+
+        HelixActivity { id }
     }
 }
 
-impl ActivityBuilder for Helix {
+pub struct HelixActivity {
+    id: u32,
+}
+
+impl ActivityBuilder for HelixActivity {
     type Error = io::Error;
 
     fn build(&mut self, activity: Activity) -> Result<Activity, Self::Error> {
-        let cwd = self.process.cwd()?;
+        let cwd = get_process_cwd(self.id)?;
 
         let activity = activity
             .details(format!("In {}", workspace(&cwd)))
