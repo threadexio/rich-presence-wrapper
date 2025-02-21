@@ -15,6 +15,16 @@ impl SystemTimeExt for SystemTime {
     }
 }
 
+pub trait PathExt {
+    fn is_empty(&self) -> bool;
+}
+
+impl PathExt for Path {
+    fn is_empty(&self) -> bool {
+        self.as_os_str().is_empty()
+    }
+}
+
 pub fn get_process_cwd(id: u32) -> io::Result<PathBuf> {
     std::fs::read_link(format!("/proc/{id}/cwd"))
 }

@@ -42,6 +42,8 @@
             rustToolchain
             helix
           ];
+
+          env._hx = "${pkgs.helix}/bin/hx";
         };
 
         apps = let

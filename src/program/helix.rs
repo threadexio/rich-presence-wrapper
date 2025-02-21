@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::rpc::{Activity, App, Party};
 use crate::util::*;
 
@@ -24,7 +26,15 @@ impl App for Helix {
         let workspace = repo_root
             .and_then(|x| x.file_name())
             .map(|x| x.to_string_lossy())
-            .or_else(|| strip_home_dir(&cwd).map(|x| x.to_string_lossy()))
+            .or_else(|| {
+                strip_home_dir(&cwd).map(|x| {
+                    if x.is_empty() {
+                        Cow::Borrowed("~/")
+                    } else {
+                        x.to_string_lossy()
+                    }
+                })
+            })
             .unwrap_or_else(|| cwd.to_string_lossy());
 
         activity.details = Some(format!("In {}", workspace));
