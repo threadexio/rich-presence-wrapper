@@ -1,27 +1,27 @@
-use std::process::{Command, ExitCode};
+use std::process::ExitCode;
 use std::thread::{sleep, spawn};
 use std::time::Duration;
 
 const APP_ID: u64 = 1339918035842105417;
 const UPDATE_INTERVAL: Duration = Duration::from_secs(5);
 
-mod helix;
+mod program;
 mod rpc;
 mod util;
 
-use self::helix::Helix;
+use self::program::Program;
 use self::rpc::Rpc;
-use self::util::env;
 
 fn main() -> ExitCode {
-    let mut args = std::env::args_os().peekable();
-    let _arg0 = args.next().unwrap();
+    let program = match Program::new() {
+        Ok(x) => x,
+        Err(e) => {
+            eprintln!("error: {e:#}");
+            return ExitCode::FAILURE;
+        }
+    };
 
-    let mut helix = Command::new(env("HELIX", || "hx"));
-    helix.args(args).env_remove("HELIX");
-
-    let helix = Helix::new(helix).unwrap();
-    let mut activity = helix.activity_builder();
+    let mut activity = program.activity_builder();
 
     spawn(move || {
         let mut rpc = Rpc::new();
@@ -34,7 +34,7 @@ fn main() -> ExitCode {
         }
     });
 
-    let status = helix.wait().unwrap();
+    let status = program.wait().unwrap();
     let code = status.code().unwrap();
     ExitCode::from(code as u8)
 }

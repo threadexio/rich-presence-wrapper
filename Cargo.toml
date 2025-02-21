@@ -1,5 +1,5 @@
 [package]
-name = "helix-rich-presence"
+name = "rich-presence-wrapper"
 version = "0.1.0"
 edition = "2021"
 

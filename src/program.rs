@@ -1,3 +1,5 @@
+use std::env::{args_os, var_os};
+use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
@@ -6,13 +8,30 @@ use std::sync::OnceLock;
 
 use crate::rpc::{Activity, ActivityBuilder};
 
-pub struct Helix {
+pub struct Program {
     process: Child,
 }
 
-impl Helix {
-    pub fn new(mut helix: Command) -> io::Result<Self> {
-        let process = helix
+impl Program {
+    pub fn new() -> io::Result<Self> {
+        let mut args = args_os();
+
+        let mut arg0 = args.next().unwrap();
+        if get_bin_path(&arg0).unwrap() == OsStr::new("rich-presence-wrapper") {
+            arg0 = args
+                .next()
+                .ok_or_else(|| io::Error::other("missing program"))?;
+        }
+
+        let arg0_name = get_bin_path(&arg0).unwrap();
+        let var_name = make_path_env_var(arg0_name);
+        let arg0_real_path = var_os(&var_name).ok_or_else(|| {
+            io::Error::other(format!("missing env var {var_name:?} for real executable"))
+        })?;
+
+        let process = Command::new(arg0_real_path)
+            .args(args)
+            .env_remove(&var_name)
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
@@ -25,18 +44,18 @@ impl Helix {
         self.process.wait()
     }
 
-    pub fn activity_builder(&self) -> HelixActivity {
+    pub fn activity_builder(&self) -> ProgramActivity {
         let id = self.process.id();
 
-        HelixActivity { id }
+        ProgramActivity { id }
     }
 }
 
-pub struct HelixActivity {
+pub struct ProgramActivity {
     id: u32,
 }
 
-impl ActivityBuilder for HelixActivity {
+impl ActivityBuilder for ProgramActivity {
     type Error = io::Error;
 
     fn build(&mut self, activity: Activity) -> Result<Activity, Self::Error> {
@@ -92,6 +111,18 @@ fn get_vcs_branch(repo_root: &Path) -> io::Result<String> {
     Ok(branch)
 }
 
+fn make_path_env_var(cmd_name: &OsStr) -> OsString {
+    let mut x = OsString::with_capacity(1 + cmd_name.len());
+    x.push("_");
+    x.push(cmd_name);
+    x
+}
+
 fn io_error(kind: io::ErrorKind) -> io::Error {
     io::Error::from(kind)
+}
+
+fn get_bin_path(s: &OsStr) -> Option<&OsStr> {
+    let p = Path::new(s);
+    p.file_name()
 }
