@@ -40,8 +40,8 @@ rustPlatform.buildRustPackage rec {
       lib.concatLines (map wrapProgram wrappedPrograms);
   
   meta = with lib; {
-    description = "Discord rich presence for the helix editor";
-    homepage = "https://github.com/threadexio/helix-rich-presence";
+    description = "Discord rich presence wrapper";
+    homepage = "https://github.com/threadexio/rich-presence-wrapper";
     license = licenses.asl20;
     mainProgram = "rich-presence-wrapper";
     platforms = platforms.all;

@@ -1,5 +1,5 @@
 {
-  description = "Discord Rich Presence wrappers";
+  description = "Discord Rich Presence wrapper";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
