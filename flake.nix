@@ -1,5 +1,5 @@
 {
-  description = "Discord Rich Presence for the helix editor";
+  description = "Discord Rich Presence wrappers";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
@@ -23,7 +23,7 @@
           })
 
           (final: _: {
-            helix-rich-presence = final.callPackage ./nix/package.nix { };
+            rich-presence-wrapper = final.callPackage ./nix/package.nix { };
           })
         ];
       };
@@ -35,21 +35,28 @@
       {
         formatter = pkgs.nixpkgs-fmt;
 
-        packages.default = pkgs.helix-rich-presence;
+        packages.default = pkgs.rich-presence-wrapper;
 
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             rustToolchain
             helix
           ];
-
-          env.HELIX = "${pkgs.helix}/bin/hx";
         };
 
-        apps.default = flake-utils.lib.mkApp {
-          drv = pkgs.helix-rich-presence;
-          name = "hx";
-        };
+        apps = let
+          programs = ["hx"];
+
+          app = name: flake-utils.lib.mkApp {
+            drv = pkgs.rich-presence-wrapper;
+            inherit name;
+          };
+
+          apps = builtins.listToAttrs
+            (builtins.map (x: { name = x; value = app x; }) programs);
+        in (apps // {
+          default = flake-utils.lib.mkApp { drv = pkgs.rich-presence-wrapper; };
+        });
       }
     );
 }

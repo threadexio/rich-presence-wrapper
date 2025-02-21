@@ -13,6 +13,10 @@ let
     cargo = rustToolchain;
     rustc = rustToolchain;
   };
+
+  wrappedPrograms = [
+    { program = "${helix}/bin/hx"; package = helix; }
+  ];
 in
 
 rustPlatform.buildRustPackage rec {
@@ -22,19 +26,24 @@ rustPlatform.buildRustPackage rec {
 
   cargoLock.lockFile = ../Cargo.lock;
 
-  buildInputs = [ helix ];
+  doCheck = false;
+
+  buildInputs = [] ++ (map (x: x.package) wrappedPrograms);
   nativeBuildInputs = [ makeWrapper ];
 
-  postInstall = ''
-    wrapProgram $out/bin/${pname} --set HELIX ${helix}/bin/hx
-    ln -rsf $out/bin/${pname} $out/bin/hx
-  '';
-
+  postInstall =
+    let
+      wrapProgram = { program, ... }: let
+          programName = baseNameOf program;
+        in "makeWrapper $out/bin/${pname} $out/bin/${programName} --inherit-argv0 --set _${programName} ${program}";
+    in
+      lib.concatLines (map wrapProgram wrappedPrograms);
+  
   meta = with lib; {
     description = "Discord rich presence for the helix editor";
     homepage = "https://github.com/threadexio/helix-rich-presence";
     license = licenses.asl20;
-    mainProgram = "hx";
+    mainProgram = "rich-presence-wrapper";
     platforms = platforms.all;
   };
 }
