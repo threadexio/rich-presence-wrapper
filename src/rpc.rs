@@ -1,18 +1,79 @@
 use std::sync::{Arc, Barrier};
 use std::time::SystemTime;
 
-use discord_presence::Client;
-use discord_presence::DiscordError;
+use discord_presence::models::Activity as DiscordActivity;
+use discord_presence::{Client, DiscordError};
 use thiserror::Error;
-
-pub use discord_presence::models::Activity;
 
 use crate::util::SystemTimeExt;
 
-pub trait ActivityBuilder {
-    type Error;
+#[derive(Debug, Default, Clone)]
+pub struct Asset {
+    pub text: Option<String>,
+    pub image: Option<String>,
+}
 
-    fn build(&mut self, activity: Activity) -> Result<Activity, Self::Error>;
+#[derive(Debug, Default, Clone)]
+pub struct Party {
+    pub size: u32,
+    pub capacity: u32,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct Activity {
+    pub details: Option<String>,
+    pub state: Option<String>,
+
+    pub small: Asset,
+    pub large: Asset,
+
+    pub party: Option<Party>,
+}
+
+fn to_discord_activity(p: Activity, mut activity: DiscordActivity) -> DiscordActivity {
+    if let Some(value) = p.details {
+        activity = activity.details(value);
+    }
+
+    if let Some(value) = p.state {
+        activity = activity.state(value);
+    }
+
+    activity = activity.assets(|mut x| {
+        if let Some(value) = p.small.text {
+            x = x.small_text(value);
+        }
+
+        if let Some(value) = p.small.image {
+            x = x.small_image(value);
+        }
+
+        if let Some(value) = p.large.text {
+            x = x.large_text(value);
+        }
+
+        if let Some(value) = p.large.image {
+            x = x.large_image(value);
+        }
+
+        x
+    });
+
+    activity = activity.party(|mut x| {
+        if let Some(party) = p.party {
+            x = x.size((party.size, party.capacity));
+        }
+
+        x
+    });
+
+    activity
+}
+
+pub trait App {
+    fn id(&self) -> u64;
+
+    fn activity(&mut self, activity: &mut Activity);
 }
 
 #[derive(Debug, Error)]
@@ -22,15 +83,12 @@ pub enum ConnectError {
 }
 
 #[derive(Debug, Error)]
-pub enum UpdateError<A> {
+pub enum UpdateError {
     #[error("not connected")]
     NotConnected,
 
     #[error(transparent)]
     Rpc(DiscordError),
-
-    #[error(transparent)]
-    Activity(A),
 }
 
 pub struct Rpc {
@@ -67,20 +125,20 @@ impl Rpc {
         Ok(())
     }
 
-    pub fn update<A>(&mut self, builder: &mut A) -> Result<(), UpdateError<A::Error>>
+    pub fn update<A>(&mut self, builder: &mut A) -> Result<(), UpdateError>
     where
-        A: ActivityBuilder,
+        A: App + ?Sized,
     {
         let Some(ref mut rpc) = self.rpc else {
             return Err(UpdateError::NotConnected);
         };
 
-        let activity = builder
-            .build(Activity::new())
-            .map_err(UpdateError::Activity)?;
+        let mut p = Activity::default();
+        builder.activity(&mut p);
 
-        rpc.set_activity(|_| {
-            activity.timestamps(|x| x.start(self.start.duration_since_epoch().as_secs()))
+        rpc.set_activity(|x| {
+            to_discord_activity(p, x)
+                .timestamps(|x| x.start(self.start.duration_since_epoch().as_secs()))
         })
         .map_err(UpdateError::Rpc)?;
 
