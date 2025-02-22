@@ -156,5 +156,6 @@ macro_rules! programs {
 }
 
 programs! {
-    "hx" => helix (feature = "helix")
+    "hx" => helix (feature = "helix"),
+    "zeditor" => zed (feature = "zed")
 }

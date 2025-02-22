@@ -9,6 +9,7 @@ discord-presence = { version = "1.5.0" }
 thiserror = { version = "2" }
 
 [features]
-default = ["helix"]
+default = ["helix", "zed"]
 
 helix = []
+zed = []

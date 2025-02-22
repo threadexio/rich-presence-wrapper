@@ -3,17 +3,17 @@ use std::borrow::Cow;
 use crate::rpc::{Activity, App, Party};
 use crate::util::*;
 
-pub struct Helix {
+pub struct Zed {
     pid: u32,
 }
 
-pub fn new(pid: u32) -> Helix {
-    Helix { pid }
+pub fn new(pid: u32) -> Zed {
+    Zed { pid }
 }
 
-impl App for Helix {
+impl App for Zed {
     fn id(&self) -> u64 {
-        1339918035842105417
+        1342862237538193418
     }
 
     fn activity(&mut self, activity: &mut Activity) {
@@ -39,7 +39,7 @@ impl App for Helix {
 
         activity.details = Some(format!("In {}", workspace));
         activity.small.image = Some("edit".to_owned());
-        activity.large.image = Some("helix-logo".to_owned());
+        activity.large.image = Some("zed-logo".to_owned());
         activity.party = Some(Party {
             size: 1,
             capacity: 1,

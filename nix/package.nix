@@ -2,8 +2,9 @@
 , makeRustPlatform
 , makeWrapper
 , helix
+, zed-editor
 , lib
-, programs ? [ "helix" ]
+, programs ? [ "helix" "zed" ]
 , ...
 }:
 with builtins;
@@ -17,6 +18,7 @@ let
 
   availablePrograms = {
     "helix" = { program = "${helix}/bin/hx"; package = helix; };
+    "zed" = { program = "${zed-editor}/bin/zeditor"; package = zed-editor; wrapperArgs = "--add-flags --foreground"; };
   };
 
   mapEnabledPrograms = f: map (name: f name availablePrograms.${name}) programs;
@@ -41,8 +43,8 @@ rustPlatform.buildRustPackage {
 
   postInstall =
     let
-      installCmd = { program, ... }:
-        "makeWrapper $out/bin/${pname} $out/bin/${baseNameOf program} --inherit-argv0 --set _${baseNameOf program} ${program}";
+      installCmd = { program, wrapperArgs ? "", ... }:
+        "makeWrapper $out/bin/${pname} $out/bin/${baseNameOf program} --inherit-argv0 --set _${baseNameOf program} ${program} ${wrapperArgs}";
 
       installCmds = mapEnabledPrograms (_: installCmd);
     in

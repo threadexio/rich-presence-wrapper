@@ -27,8 +27,8 @@ impl PathExt for Path {
     }
 }
 
-pub fn get_process_cwd(id: u32) -> io::Result<PathBuf> {
-    std::fs::read_link(format!("/proc/{id}/cwd"))
+pub fn process_cwd(pid: u32) -> io::Result<PathBuf> {
+    std::fs::read_link(format!("/proc/{pid}/cwd"))
 }
 
 pub fn find_repo_root(path: &Path) -> Option<&Path> {
