@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;

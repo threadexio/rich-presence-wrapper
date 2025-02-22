@@ -17,7 +17,11 @@ pub enum ProgramError {
 You can specify a target program via:
  * renaming this executable to the target program,
  * symlinking the wrapper executable with the name of the target program, or
- * specifying the target program as the first argument."
+ * specifying the target program as the first argument.
+
+Supported target programs:
+--------------------------
+{AvailablePrograms}"
     )]
     MissingProgram,
 
@@ -34,8 +38,7 @@ There is no rich presence support for the requested target program.
 
 Supported target programs:
 --------------------------
-{available_programs}",
-        available_programs = AvailablePrograms(AVAILABLE_PROGRAMS)
+{AvailablePrograms}"
     )]
     UnknownProgram(OsString),
 }
@@ -108,25 +111,33 @@ fn get_bin_path(s: &OsStr) -> Option<&OsStr> {
     p.file_name()
 }
 
-struct AvailablePrograms(&'static [&'static str]);
+struct AvailablePrograms;
 
 impl fmt::Display for AvailablePrograms {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.iter().try_for_each(|x| writeln!(f, "  {x}"))
+        AVAILABLE_PROGRAMS
+            .iter()
+            .try_for_each(|x| writeln!(f, "  {x}"))
     }
 }
 
 macro_rules! programs {
     (
         $(
-            $($cmd:literal),+ => $mod:ident
+            $($cmd:literal),+ => $mod:ident ($cfg:meta)
         ),*
     ) => {
         $(
+            #[cfg($cfg)]
             mod $mod;
         )*
 
-        const AVAILABLE_PROGRAMS: &[&str] = &[ $( $($cmd),+ ),* ];
+        const AVAILABLE_PROGRAMS: &[&str] = &[ $(
+           $(
+               #[cfg($cfg)]
+                $cmd
+            ),+
+        ),* ];
 
         type ProgramConstructor = Box<dyn FnOnce(u32) -> Box<dyn App + Send>>;
 
@@ -134,6 +145,7 @@ macro_rules! programs {
             match &*arg0.to_string_lossy() {
                 $(
                     $(
+                        #[cfg($cfg)]
                         $cmd => Some(Box::new(|pid| Box::new(self::$mod::new(pid)))),
                     )+
                 )*
@@ -144,5 +156,5 @@ macro_rules! programs {
 }
 
 programs! {
-    "hx" => helix
+    "hx" => helix (feature = "helix")
 }

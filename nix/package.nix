@@ -3,6 +3,7 @@
 , makeWrapper
 , helix
 , lib
+, programs ? [ "helix" ]
 , ...
 }:
 with builtins;
@@ -14,31 +15,39 @@ let
     rustc = rustToolchain;
   };
 
-  wrappedPrograms = [
-    { program = "${helix}/bin/hx"; package = helix; }
-  ];
-in
+  availablePrograms = {
+    "helix" = { program = "${helix}/bin/hx"; package = helix; };
+  };
 
-rustPlatform.buildRustPackage rec {
+  mapEnabledPrograms = f: map (name: f name availablePrograms.${name}) programs;
+
   pname = manifest.package.name;
   version = manifest.package.version;
+in
+rustPlatform.buildRustPackage {
+  inherit pname version;
   src = ../.;
 
   cargoLock.lockFile = ../Cargo.lock;
 
-  doCheck = false;
+  inherit programs;
+  availablePrograms = attrNames availablePrograms;
 
-  buildInputs = [] ++ (map (x: x.package) wrappedPrograms);
+  doCheck = false;
+  buildNoDefaultFeatures = true;
+  buildFeatures = mapEnabledPrograms (name: _: name);
+  buildInputs = mapEnabledPrograms (_: { package, ... }: package);
   nativeBuildInputs = [ makeWrapper ];
 
   postInstall =
     let
-      wrapProgram = { program, ... }: let
-          programName = baseNameOf program;
-        in "makeWrapper $out/bin/${pname} $out/bin/${programName} --inherit-argv0 --set _${programName} ${program}";
+      installCmd = { program, ... }:
+        "makeWrapper $out/bin/${pname} $out/bin/${baseNameOf program} --inherit-argv0 --set _${baseNameOf program} ${program}";
+
+      installCmds = mapEnabledPrograms (_: installCmd);
     in
-      lib.concatLines (map wrapProgram wrappedPrograms);
-  
+    lib.concatLines installCmds;
+
   meta = with lib; {
     description = "Discord rich presence wrapper";
     homepage = "https://github.com/threadexio/rich-presence-wrapper";
