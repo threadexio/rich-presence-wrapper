@@ -46,21 +46,9 @@
           env._hx = "${pkgs.helix}/bin/hx";
         };
 
-        apps =
-          let
-            programs = [ "hx" ];
-
-            app = name: flake-utils.lib.mkApp {
-              drv = pkgs.rich-presence-wrapper;
-              inherit name;
-            };
-
-            apps = builtins.listToAttrs
-              (builtins.map (x: { name = x; value = app x; }) programs);
-          in
-          (apps // {
-            default = flake-utils.lib.mkApp { drv = pkgs.rich-presence-wrapper; };
-          });
+        apps.default = flake-utils.lib.mkApp {
+          drv = pkgs.rich-presence-wrapper;
+        };
       }
     );
 }
