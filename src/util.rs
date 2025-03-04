@@ -2,7 +2,7 @@
 
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Child, Command};
 use std::str::from_utf8;
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -24,6 +24,16 @@ pub trait PathExt {
 impl PathExt for Path {
     fn is_empty(&self) -> bool {
         self.as_os_str().is_empty()
+    }
+}
+
+pub trait ChildExt {
+    fn cwd(&self) -> io::Result<PathBuf>;
+}
+
+impl ChildExt for Child {
+    fn cwd(&self) -> io::Result<PathBuf> {
+        process_cwd(self.id())
     }
 }
 

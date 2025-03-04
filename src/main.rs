@@ -2,36 +2,45 @@ use std::process::ExitCode;
 use std::thread::{sleep, spawn};
 use std::time::Duration;
 
+use eyre::Result;
+
 const UPDATE_INTERVAL: Duration = Duration::from_secs(5);
 
 mod program;
 mod rpc;
 mod util;
 
-use self::program::Program;
 use self::rpc::{App, Rpc};
 
 fn main() -> ExitCode {
-    let (program, mut app) = match Program::new() {
+    color_eyre::install().unwrap();
+
+    match try_main() {
         Ok(x) => x,
         Err(e) => {
             eprintln!("error: {e:#}");
-            return ExitCode::FAILURE;
+            ExitCode::FAILURE
         }
-    };
+    }
+}
 
-    spawn(move || {
-        let mut rpc = Rpc::new();
+fn try_main() -> Result<ExitCode> {
+    let mut program = program::run()?;
+    let waiter = program.waiter();
 
-        loop {
-            sleep(UPDATE_INTERVAL);
+    let mut rpc = Rpc::new();
 
-            let _ = rpc.connect(app.id());
-            let _ = rpc.update(&mut app);
-        }
+    spawn(move || loop {
+        sleep(UPDATE_INTERVAL);
+
+        let _ = rpc.connect(program.id());
+        let _ = rpc.update(&mut program);
     });
 
-    let status = program.wait().unwrap();
-    let code = status.code().unwrap();
-    ExitCode::from(code as u8)
+    let code = waiter
+        .wait()
+        .map(|x| x.code().unwrap_or(127) as u8)
+        .unwrap_or(128);
+
+    Ok(ExitCode::from(code))
 }

@@ -4,8 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+color-eyre = "0.6.3"
 dirs = { version = "6" }
 discord-presence = { version = "1.5.0" }
+eyre = "0.6.12"
+nix = { version = "0.29.0", features = ["process"] }
 thiserror = { version = "2" }
 
 [features]

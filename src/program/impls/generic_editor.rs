@@ -1,22 +1,15 @@
 use std::borrow::Cow;
 
-use crate::rpc::{Activity, App, Party};
+use crate::rpc::{Activity, Party};
 use crate::util::*;
 
-pub struct Helix {
-    pid: u32,
+pub struct GenericEditor {
+    pub logo: &'static str,
+    pub pid: u32,
 }
 
-pub fn new(pid: u32) -> Helix {
-    Helix { pid }
-}
-
-impl App for Helix {
-    fn id(&self) -> u64 {
-        1339918035842105417
-    }
-
-    fn activity(&mut self, activity: &mut Activity) {
+impl GenericEditor {
+    pub fn activity(&mut self, activity: &mut Activity) {
         let Ok(cwd) = process_cwd(self.pid) else {
             return;
         };
@@ -39,7 +32,7 @@ impl App for Helix {
 
         activity.details = Some(format!("In {}", workspace));
         activity.small.image = Some("edit".to_owned());
-        activity.large.image = Some("helix-logo".to_owned());
+        activity.large.image = Some(self.logo.to_owned());
         activity.party = Some(Party {
             size: 1,
             capacity: 1,
