@@ -20,7 +20,6 @@ impl From<&'_ Child> for Waiter {
 impl Waiter {
     pub fn wait(self) -> io::Result<ExitStatus> {
         loop {
-            println!("waiting...");
             match waitpid(self.0, None) {
                 Ok(WaitStatus::Exited(_, status)) => return Ok(ExitStatus::from_raw(status)),
                 Ok(_) => continue,
