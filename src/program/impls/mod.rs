@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use std::ffi::OsString;
 use std::fmt;
 use std::process::Command;
@@ -49,6 +51,7 @@ macro_rules! programs {
             match arg0.binary_name().to_str() {
                 $(
                     $(
+                        #[cfg($cfg)]
                         Some($bin) => Ok(Box::new(self::$mod::new(arg0, args)?)),
                     )+
                 )*
