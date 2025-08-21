@@ -11,10 +11,11 @@
   };
 
   outputs =
-    { self
-    , nixpkgs
-    , rust-overlay
-    , ...
+    {
+      self,
+      nixpkgs,
+      rust-overlay,
+      ...
     }:
     let
       systems = [
@@ -61,84 +62,34 @@
 
       packages = perSystem (pkgs: {
         default = pkgs.rich-presence-wrapper;
+
+        helix = pkgs.callPackage ./nix/helix.nix { };
+        zed-editor = pkgs.callPackage ./nix/zed-editor.nix { };
       });
 
-      apps = perSystem (pkgs: {
-        default = {
-          type = "app";
-          program = lib.getExe pkgs.rich-presence-wrapper;
-        };
-      });
-
-      overlays =
+      apps = perSystem (
+        pkgs:
         let
-          mkOverlay =
-            { package
-            , pathsToLink ? [ ]
-            , wrapperArgs ? [ ]
-            , ...
-            }:
-            final: prev:
-            let
-              drv = prev.${package};
-              programName = drv.meta.mainProgram or drv.pname;
-
-              rich-presence-wrapper =
-                lib.throwIfNot (lib.hasAttr "rich-presence-wrapper" final)
-                  "The '${package}' overlay of `rich-presence-wrapper` requires that the package `rich-presence-wrapper` is available in `pkgs`. Did you forget to include the 'default' overlay?"
-                  final.rich-presence-wrapper;
-            in
-            {
-              "${package}" = final.buildEnv {
-                name = "${drv.pname}-rich-presence-wrapper";
-
-                paths = [
-                  rich-presence-wrapper
-                  drv
-                ];
-
-                inherit pathsToLink;
-
-                nativeBuildInputs = [ final.makeWrapper ];
-
-                postBuild = ''
-                  mkdir -p $out/bin
-
-                  makeWrapper ${lib.getExe rich-presence-wrapper} $out/bin/${programName} \
-                    --set _${programName} ${lib.getExe drv} \
-                    --inherit-argv0 \
-                    ${lib.concatStringsSep " " wrapperArgs}
-                '';
-              };
-            };
+          mkApp = drv: {
+            type = "app";
+            program = lib.getExe drv;
+          };
         in
-        {
-          default = final: _: {
-            rich-presence-wrapper = self.packages.${final.system}.default;
-          };
+        lib.mapAttrs (_: mkApp) self.packages.${pkgs.system}
+      );
 
-          helix = mkOverlay {
-            package = "helix";
-
-            pathsToLink = [
-              "/share"
-              "/lib"
-            ];
-          };
-
-          zed-editor = mkOverlay {
-            package = "zed-editor";
-
-            pathsToLink = [
-              "/share"
-              "/libexec"
-            ];
-
-            wrapperArgs = [
-              "--add-flags"
-              "--foreground"
-            ];
-          };
+      overlays = {
+        default = final: _: {
+          rich-presence-wrapper = self.packages.${final.system}.default;
         };
+
+        helix = final: prev: {
+          helix = final.callPackage ./nix/helix.nix { inherit (prev) helix; };
+        };
+
+        zed-editor = final: prev: {
+          zed-editor = final.callPackage ./nix/zed-editor.nix { inherit (prev) zed-editor; };
+        };
+      };
     };
 }
