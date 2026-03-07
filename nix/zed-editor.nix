@@ -25,9 +25,9 @@ buildEnv {
     mkdir -p $out/bin
 
     makeWrapper ${lib.getExe rich-presence-wrapper} $out/bin/zeditor \
-      --set _zeditor ${lib.getExe zed-editor} \
-      --inherit-argv0 \
-      --add-flags --foreground
+      --append-flag zeditor \
+      --append-flag --foreground \
+      --set _zeditor ${lib.getExe zed-editor}
   '';
 
   inherit (zed-editor) meta;

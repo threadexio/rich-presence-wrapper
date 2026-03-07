@@ -86,7 +86,7 @@
       // (lib.genAttrs wrappedApps (name: pkgs.rich-presence-wrapper.passthru.${name}))
       );
 
-      apps = perSystem' (system: lib.mapAttrs mkApp self.packages.${system});
+      apps = perSystem' (system: lib.mapAttrs (_: mkApp) self.packages.${system});
 
       overlays = {
         default = pkgs: _: {

@@ -25,8 +25,8 @@ buildEnv {
     mkdir -p $out/bin
 
     makeWrapper ${lib.getExe rich-presence-wrapper} $out/bin/hx \
-      --set _hx ${lib.getExe helix} \
-      --inherit-argv0
+      --append-flag hx \
+      --set _hx ${lib.getExe helix}
   '';
 
   inherit (helix) meta;

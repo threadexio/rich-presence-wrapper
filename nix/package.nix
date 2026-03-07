@@ -1,13 +1,15 @@
 { rustPlatform
 , callPackage
+, makeWrapper
 , lib
+, git
 , ...
 }:
 
 let
   manifest = lib.importTOML ../Cargo.toml;
 
-  rich-presence-wrapper = rustPlatform.buildRustPackage {
+  rich-presence-wrapper = rustPlatform.buildRustPackage (final: {
     pname = manifest.package.name;
     inherit (manifest.package) version;
 
@@ -24,7 +26,15 @@ let
 
     cargoLock.lockFile = ../Cargo.lock;
 
+    buildInputs = [ git ];
+    nativeBuildInputs = [ makeWrapper ];
+
     doCheck = false;
+
+    postInstall =  ''
+      wrapProgram $out/bin/${final.meta.mainProgram} \
+        --prefix PATH : ${lib.makeBinPath [ git ]}
+    '';
 
     meta = with lib; {
       description = "Discord rich presence wrapper";
@@ -44,7 +54,7 @@ let
         helix = callPackage ./helix.nix args;
         zed-editor = callPackage ./zed-editor.nix args;
       };
-  };
+  });
 in
 
 rich-presence-wrapper
