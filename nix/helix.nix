@@ -1,11 +1,9 @@
-{
-  buildEnv,
-  makeWrapper,
-  lib,
-
-  rich-presence-wrapper,
-  helix ? null,
-  ...
+{ buildEnv
+, makeWrapper
+, lib
+, rich-presence-wrapper
+, helix
+, ...
 }:
 
 buildEnv {

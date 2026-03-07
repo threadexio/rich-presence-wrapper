@@ -1,11 +1,9 @@
-{
-  buildEnv,
-  makeWrapper,
-  lib,
-
-  rich-presence-wrapper,
-  zed-editor,
-  ...
+{ buildEnv
+, makeWrapper
+, lib
+, rich-presence-wrapper
+, zed-editor
+, ...
 }:
 
 buildEnv {

@@ -11,11 +11,10 @@
   };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-      rust-overlay,
-      ...
+    { self
+    , nixpkgs
+    , rust-overlay
+    , ...
     }:
     let
       systems = [
@@ -25,6 +24,11 @@
         "x86_64-darwin"
       ];
 
+      wrappedApps = [
+        "helix"
+        "zed-editor"
+      ];
+
       inherit (nixpkgs) lib;
 
       mkPkgs =
@@ -32,64 +36,68 @@
         import nixpkgs {
           inherit system;
           overlays = [
-            (import rust-overlay)
+            (
+              pkgs: _:
+                let
+                  scope = lib.makeScope pkgs.newScope (scope: {
+                    inherit self;
 
-            (final: _: {
-              rustToolchain = final.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-            })
+                    rust-bin = rust-overlay.lib.mkRustBin { } pkgs.buildPackages;
+                    rustToolchain = scope.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 
-            (final: _: {
-              rich-presence-wrapper = final.callPackage ./nix/package.nix { };
-            })
+                    rustPlatform = pkgs.makeRustPlatform {
+                      rustc = scope.rustToolchain;
+                      cargo = scope.rustToolchain;
+                    };
+
+                    devshell = scope.callPackage ./nix/devshell.nix { };
+                    rich-presence-wrapper = scope.callPackage ./nix/package.nix { };
+                  });
+                in
+                {
+                  inherit (scope)
+                    rich-presence-wrapper
+                    devshell
+                    ;
+                }
+            )
           ];
         };
 
-      perSystem = f: lib.genAttrs systems (system: f (mkPkgs system));
+      perSystem' = f: lib.genAttrs systems f;
+      perSystem = f: perSystem' (system: f (mkPkgs system));
+
+      mkApp = drv: {
+        type = "app";
+        program = lib.getExe drv;
+      };
     in
     {
       formatter = perSystem (pkgs: pkgs.nixpkgs-fmt);
 
       devShells = perSystem (pkgs: {
-        default = pkgs.mkShell {
-          packages = with pkgs; [
-            rustToolchain
-            helix
-          ];
-
-          env._hx = lib.getExe pkgs.helix;
-        };
+        default = pkgs.devshell;
       });
 
       packages = perSystem (pkgs: {
         default = pkgs.rich-presence-wrapper;
-
-        helix = pkgs.callPackage ./nix/helix.nix { };
-        zed-editor = pkgs.callPackage ./nix/zed-editor.nix { };
-      });
-
-      apps = perSystem (
-        pkgs:
-        let
-          mkApp = drv: {
-            type = "app";
-            program = lib.getExe drv;
-          };
-        in
-        lib.mapAttrs (_: mkApp) self.packages.${pkgs.system}
+        inherit (pkgs) rich-presence-wrapper;
+      }
+      // (lib.genAttrs wrappedApps (name: pkgs.rich-presence-wrapper.passthru.${name}))
       );
 
+      apps = perSystem' (system: lib.mapAttrs mkApp self.packages.${system});
+
       overlays = {
-        default = final: _: {
-          rich-presence-wrapper = self.packages.${final.system}.default;
+        default = pkgs: _: {
+          rich-presence-wrapper = self.packages.${pkgs.hostPlatform.system}.default;
         };
-
-        helix = final: prev: {
-          helix = final.callPackage ./nix/helix.nix { inherit (prev) helix; };
-        };
-
-        zed-editor = final: prev: {
-          zed-editor = final.callPackage ./nix/zed-editor.nix { inherit (prev) zed-editor; };
-        };
-      };
+      }
+      // (lib.genAttrs wrappedApps (name:
+        pkgs: _: {
+          "${name}" = pkgs.rich-presence-wrapper.passthru.${name};
+        }
+      ))
+      ;
     };
 }
