@@ -73,12 +73,11 @@ where
     child.arg0(arg0).args(argv);
     child.env_remove(env_var_name);
 
+    #[cfg(target_os = "linux")]
     unsafe {
         child.pre_exec(|| {
             nix::sys::prctl::set_pdeathsig(nix::sys::signal::Signal::SIGHUP)
-                .map_err(|e| io::Error::from_raw_os_error(e as i32))?;
-
-            Ok(())
+                .map_err(|e| io::Error::from_raw_os_error(e as i32))
         });
     }
 
