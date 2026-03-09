@@ -25,7 +25,7 @@ buildEnv {
     mkdir -p $out/bin
 
     makeWrapper ${lib.getExe rich-presence-wrapper} $out/bin/hx \
-      --append-flag hx \
+      --add-flag hx \
       --set _hx ${lib.getExe helix}
   '';
 
