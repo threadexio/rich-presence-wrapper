@@ -90,7 +90,7 @@
 
       overlays = {
         default = pkgs: _: {
-          rich-presence-wrapper = self.packages.${pkgs.hostPlatform.system}.default;
+          rich-presence-wrapper = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
         };
       }
       // (lib.genAttrs wrappedApps (name:
