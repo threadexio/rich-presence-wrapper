@@ -1,5 +1,5 @@
 { buildEnv
-, makeWrapper
+, makeBinaryWrapper
 , lib
 , rich-presence-wrapper
 , helix
@@ -19,13 +19,13 @@ buildEnv {
     "/lib"
   ];
 
-  nativeBuildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ makeBinaryWrapper ];
 
   postBuild = ''
     mkdir -p $out/bin
 
-    makeWrapper ${lib.getExe rich-presence-wrapper} $out/bin/hx \
-      --add-flag hx \
+    makeBinaryWrapper ${lib.getExe rich-presence-wrapper} $out/bin/hx \
+      --inherit-argv0 \
       --set _hx ${lib.getExe helix}
   '';
 

@@ -1,6 +1,6 @@
 { rustPlatform
 , callPackage
-, makeWrapper
+, makeBinaryWrapper
 , lib
 , git
 , ...
@@ -27,12 +27,13 @@ let
     cargoLock.lockFile = ../Cargo.lock;
 
     buildInputs = [ git ];
-    nativeBuildInputs = [ makeWrapper ];
+    nativeBuildInputs = [ makeBinaryWrapper ];
 
     doCheck = false;
 
     postInstall =  ''
       wrapProgram $out/bin/${final.meta.mainProgram} \
+        --inherit-argv0 \
         --prefix PATH : ${lib.makeBinPath [ git ]}
     '';
 

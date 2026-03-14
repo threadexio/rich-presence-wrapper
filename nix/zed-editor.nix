@@ -1,5 +1,5 @@
 { buildEnv
-, makeWrapper
+, makeBinaryWrapper
 , lib
 , rich-presence-wrapper
 , zed-editor
@@ -19,13 +19,13 @@ buildEnv {
     "/libexec"
   ];
 
-  nativeBuildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ makeBinaryWrapper ];
 
   postBuild = ''
     mkdir -p $out/bin
 
-    makeWrapper ${lib.getExe rich-presence-wrapper} $out/bin/zeditor \
-      --add-flag zeditor \
+    makeBinaryWrapper ${lib.getExe rich-presence-wrapper} $out/bin/zeditor \
+      --inherit-argv0 \
       --add-flag --foreground \
       --set _zeditor ${lib.getExe zed-editor}
   '';
