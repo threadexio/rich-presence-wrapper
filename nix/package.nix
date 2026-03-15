@@ -31,7 +31,7 @@ let
 
     doCheck = false;
 
-    postInstall =  ''
+    postInstall = ''
       wrapProgram $out/bin/${final.meta.mainProgram} \
         --inherit-argv0 \
         --prefix PATH : ${lib.makeBinPath [ git ]}
