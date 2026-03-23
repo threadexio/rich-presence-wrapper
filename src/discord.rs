@@ -1,14 +1,15 @@
+#![allow(dead_code)]
+
 use std::time::Duration;
 
+use discord_rich_presence::error::Error as DiscordError;
 use discord_rich_presence::{DiscordIpc, DiscordIpcClient};
 use eyre::{bail, Result};
 use tokio::sync::{mpsc, oneshot};
 
-use discord_rich_presence::error::Error as DiscordError;
-
 pub use discord_rich_presence::activity::*;
 
-use crate::util::Backoff;
+use crate::util::{Backoff, Never};
 
 pub struct Builder<ClientId> {
     pub client_id: ClientId,
@@ -24,14 +25,14 @@ impl<T> Builder<T>
 where
     T: AsRef<str>,
 {
-    pub async fn finish(self) -> Result<Ipc> {
+    pub fn finish(self) -> Discord {
         let Self { client_id } = self;
         let client_id = client_id.as_ref();
 
         let (tx, rx) = mpsc::channel(16);
         let (error_tx, error_rx) = oneshot::channel();
 
-        let mut task = IpcTask {
+        let mut task = DiscordTask {
             inner: DiscordIpcClient::new(client_id),
             rx,
         };
@@ -41,19 +42,19 @@ where
             let _ = error_tx.send(err);
         });
 
-        Ok(Ipc {
+        Discord {
             tx,
             error: Some(error_rx),
-        })
+        }
     }
 }
 
-pub struct Ipc {
-    tx: mpsc::Sender<IpcMessage>,
+pub struct Discord {
+    tx: mpsc::Sender<DiscordMessage>,
     error: Option<oneshot::Receiver<eyre::Error>>,
 }
 
-impl Ipc {
+impl Discord {
     pub fn builder() -> Builder<()> {
         Builder { client_id: () }
     }
@@ -63,14 +64,14 @@ impl Ipc {
         activity: impl Into<Box<Activity<'static>>>,
     ) -> Result<()> {
         let activity = activity.into();
-        self.send(IpcMessage::SetActivity { activity }).await
+        self.send(DiscordMessage::SetActivity { activity }).await
     }
 
     pub async fn clear_activity(&mut self) -> Result<()> {
-        self.send(IpcMessage::ClearActivity).await
+        self.send(DiscordMessage::ClearActivity).await
     }
 
-    async fn send(&mut self, m: IpcMessage) -> Result<()> {
+    async fn send(&mut self, m: DiscordMessage) -> Result<()> {
         let Err(_) = self.tx.send(m).await else {
             return Ok(());
         };
@@ -84,28 +85,25 @@ impl Ipc {
     }
 }
 
-enum IpcMessage {
+enum DiscordMessage {
     SetActivity { activity: Box<Activity<'static>> },
     ClearActivity,
 }
 
-struct IpcTask {
+struct DiscordTask {
     inner: DiscordIpcClient,
-    rx: mpsc::Receiver<IpcMessage>,
+    rx: mpsc::Receiver<DiscordMessage>,
 }
 
-#[derive(Debug)]
-enum Never {}
-
-impl IpcTask {
+impl DiscordTask {
     fn run(&mut self) -> Result<Never> {
         loop {
             match self.rx.blocking_recv() {
-                Some(IpcMessage::SetActivity { activity }) => {
+                Some(DiscordMessage::SetActivity { activity }) => {
                     self.handle_set_activity(activity)?;
                 }
 
-                Some(IpcMessage::ClearActivity) => {
+                Some(DiscordMessage::ClearActivity) => {
                     self.handle_clear_activity()?;
                 }
 

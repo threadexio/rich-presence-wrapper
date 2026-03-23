@@ -1,15 +1,12 @@
 use std::cmp::min;
-use std::ffi::OsStr;
-use std::io;
 use std::path::{Path, PathBuf};
+use std::process::{ExitCode, ExitStatus};
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use tokio::process::Command;
-
 ///////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Never {}
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -46,63 +43,52 @@ impl Backoff {
         self.delay = min(self.max, new_delay);
     }
 
-    pub fn get(&self) -> Duration {
-        self.delay
-    }
-
     pub fn blocking_sleep(&mut self) {
         std::thread::sleep(self.delay);
-        self.advance();
-    }
-
-    pub async fn sleep(&mut self) {
-        tokio::time::sleep(self.delay).await;
         self.advance();
     }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-pub fn process_cwd(pid: u32) -> io::Result<PathBuf> {
-    let mut path = PathBuf::with_capacity(32);
-    path.push("/proc");
-    path.push(format!("{}", pid));
-    path.push("cwd");
-    std::fs::read_link(path)
-}
-
 pub fn home_dir() -> Option<&'static Path> {
     static HOME_DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
     HOME_DIR.get_or_init(dirs::home_dir).as_deref()
 }
 
-pub fn basename(x: &OsStr) -> Option<&OsStr> {
-    Path::new(x).file_name()
+pub fn config_dir() -> Option<&'static Path> {
+    static CONFIG_DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
+    CONFIG_DIR.get_or_init(dirs::config_dir).as_deref()
 }
 
-pub fn find_repo_root(in_repo: &Path) -> Option<&Path> {
-    in_repo.ancestors().find(|p| p.join(".git").is_dir())
+///////////////////////////////////////////////////////////////////////////////
+
+pub fn exit_status_to_code(x: ExitStatus) -> ExitCode {
+    x.code()
+        .map(|x| x as u8)
+        .map(ExitCode::from)
+        .unwrap_or(ExitCode::FAILURE)
 }
 
-pub async fn get_vcs_branch(repo: &Path) -> io::Result<Option<String>> {
-    let output = Command::new("git")
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .current_dir(repo)
-        .output()
-        .await?;
+///////////////////////////////////////////////////////////////////////////////
 
-    let stdout = str::from_utf8(&output.stdout)
-        .map_err(|_| invalid_data())?
-        .trim();
+pub trait PathJoin {
+    fn join(self) -> PathBuf;
+}
 
-    if stdout.is_empty() {
-        return Ok(None);
+impl<I> PathJoin for I
+where
+    I: IntoIterator,
+    I::Item: AsRef<Path>,
+    I::IntoIter: Clone,
+{
+    fn join(self) -> PathBuf {
+        let iter = self.into_iter();
+
+        let capacity: usize = iter.clone().map(|x| x.as_ref().as_os_str().len()).sum();
+
+        let mut path = PathBuf::with_capacity(capacity);
+        iter.for_each(|x| path.push(x.as_ref()));
+        path
     }
-
-    let branch = stdout.to_owned();
-    Ok(Some(branch))
-}
-
-fn invalid_data() -> io::Error {
-    io::Error::from(io::ErrorKind::InvalidData)
 }

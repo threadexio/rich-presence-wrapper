@@ -3,6 +3,10 @@
 , makeBinaryWrapper
 , lib
 , git
+, playerctl
+, withHelix ? true
+, withZed ? true
+, withMprisBridge ? true
 , ...
 }:
 
@@ -26,7 +30,19 @@ let
 
     cargoLock.lockFile = ../Cargo.lock;
 
-    buildInputs = [ git ];
+    buildNoDefaultFeatures = true;
+    buildFeatures = [ ]
+      ++ (lib.optional withHelix "helix")
+      ++ (lib.optional withZed "zed")
+      ++ (lib.optional withMprisBridge "mpris-bridge")
+    ;
+
+    buildInputs = [ ]
+      ++ (lib.optionals withHelix [ git ])
+      ++ (lib.optionals withZed [ git ])
+      ++ (lib.optionals withMprisBridge [ playerctl ])
+    ;
+
     nativeBuildInputs = [ makeBinaryWrapper ];
 
     doCheck = false;
@@ -34,7 +50,7 @@ let
     postInstall = ''
       wrapProgram $out/bin/${final.meta.mainProgram} \
         --inherit-argv0 \
-        --prefix PATH : ${lib.makeBinPath [ git ]}
+        --prefix PATH : ${lib.makeBinPath final.buildInputs}
     '';
 
     meta = with lib; {
@@ -51,10 +67,10 @@ let
           inherit rich-presence-wrapper;
         };
       in
-      {
-        helix = callPackage ./helix.nix args;
-        zed-editor = callPackage ./zed-editor.nix args;
-      };
+      { }
+      // (lib.optionalAttrs withHelix { helix = callPackage ./helix.nix args; })
+      // (lib.optionalAttrs withZed { zed-editor = callPackage ./zed-editor.nix args; })
+    ;
   });
 in
 

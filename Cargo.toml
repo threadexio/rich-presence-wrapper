@@ -1,18 +1,28 @@
 [package]
 name = "rich-presence-wrapper"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-async-trait = "0.1"
+clap = { version = "4.6.0", features = ["derive", "env"] }
 dirs = "6"
 discord-rich-presence = "1.1.0"
 eyre = "0.6"
-nix = { version = "0.31", features = ["process"] }
-tokio = { version = "1", features = ["macros", "sync", "time", "process", "rt"] }
+html-escape = { version = "0.2", optional = true }
+module = { version = "0.3", features = ["derive", "serde"] }
+module-util = { version = "0.3", features = ["serde"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1", optional = true }
+toml = "1"
+tokio = { version = "1", features = ["sync", "time", "process", "rt"] }
 
 [features]
-default = ["helix", "zed"]
+default = [
+  "helix",
+  "zed",
+  "mpris-bridge"
+]
 
 helix = []
 zed = []
+mpris-bridge = ["dep:html-escape", "dep:serde_json", "tokio/io-util"]

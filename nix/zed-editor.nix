@@ -26,7 +26,6 @@ buildEnv {
 
     makeBinaryWrapper ${lib.getExe rich-presence-wrapper} $out/bin/zeditor \
       --inherit-argv0 \
-      --add-flag --foreground \
       --set _zeditor ${lib.getExe zed-editor}
   '';
 

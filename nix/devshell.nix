@@ -2,6 +2,8 @@
 , rustToolchain
 , lib
 , helix
+, zed-editor
+, playerctl
 , ...
 }:
 
@@ -11,5 +13,9 @@ mkShell {
     helix
   ];
 
-  env._hx = lib.getExe helix;
+  env = {
+    _hx = lib.getExe helix;
+    _zeditor = lib.getExe zed-editor;
+    _playerctl = lib.getExe playerctl;
+  };
 }

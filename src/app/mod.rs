@@ -1,28 +1,10 @@
-use async_trait::async_trait;
-use eyre::Result;
-use tokio::process::Command;
+mod common;
 
-use crate::util::Never;
+#[cfg(feature = "helix")]
+pub mod helix;
 
-mod helix;
-pub use self::helix::Helix;
+#[cfg(feature = "zed")]
+pub mod zed;
 
-mod zed;
-pub use self::zed::Zed;
-
-mod generic_editor;
-
-#[async_trait]
-pub trait App {
-    fn program(&mut self, program: &mut Command) -> Result<()>;
-
-    async fn run(&mut self, pid: u32) -> Result<Never>;
-}
-
-mod prelude {
-    pub(crate) use super::App;
-    pub(crate) use crate::ipc::*;
-    pub(crate) use crate::util::*;
-    pub(crate) use eyre::Result;
-    pub(crate) use tokio::process::Command;
-}
+#[cfg(feature = "mpris-bridge")]
+pub mod mpris_bridge;
