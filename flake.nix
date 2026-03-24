@@ -99,10 +99,14 @@
         };
       }
       // (lib.genAttrs wrappedApps (name:
-        pkgs: _: {
-          "${name}" = pkgs.rich-presence-wrapper.passthru.${name};
+        final: prev: {
+          "${name}" = final.callPackage ./nix/${name}.nix {
+            "${name}" = lib.getAttr name prev;
+          };
         }
       ))
       ;
+
+      homeModules.default = import ./nix/home-module.nix { inherit self; };
     };
 }
