@@ -1,11 +1,11 @@
 {
   mkShell,
-  hello,
+  rustToolchain,
   ...
 }:
 
 mkShell {
   packages = [
-    hello
+    rustToolchain
   ];
 }

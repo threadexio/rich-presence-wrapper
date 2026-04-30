@@ -8,10 +8,20 @@
       url = "github:NixOS/flake-compat";
       flake = false;
     };
+
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
-    { self, nixpkgs, ... }@inputs:
+    {
+      self,
+      nixpkgs,
+      rust-overlay,
+      ...
+    }@inputs:
     let
       inherit (nixpkgs) lib;
 
@@ -29,6 +39,14 @@
                 (pkgs: _: {
                   scope = lib.makeScope pkgs.newScope (scope: {
                     inherit self inputs;
+
+                    rust-bin = rust-overlay.lib.mkRustBin { } pkgs.buildPackages;
+                    rustToolchain = scope.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+
+                    rustPlatform = pkgs.makeRustPlatform {
+                      rustc = scope.rustToolchain;
+                      cargo = scope.rustToolchain;
+                    };
 
                     devShells = {
                       default = scope.callPackage ./nix/devshells { };
