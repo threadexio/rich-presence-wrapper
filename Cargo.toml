@@ -15,6 +15,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1", optional = true }
 toml = "1"
 tokio = { version = "1", features = ["sync", "time", "process", "rt"] }
+regex = { version = "1", optional = true }
 
 [features]
 default = [
@@ -25,4 +26,4 @@ default = [
 
 helix = []
 zed = []
-mpris-bridge = ["dep:html-escape", "dep:serde_json", "tokio/io-util"]
+mpris-bridge = ["dep:html-escape", "dep:serde_json", "dep:regex", "tokio/io-util"]

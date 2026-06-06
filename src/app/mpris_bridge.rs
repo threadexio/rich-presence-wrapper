@@ -1,16 +1,16 @@
+use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::process::Stdio;
 use std::time::SystemTime;
 
-use eyre::Context;
-use eyre::Result;
+use eyre::{Context, Result};
 use module::Merge;
 use module::types::Overridable;
-use serde::Deserialize;
-use tokio::io::AsyncBufReadExt;
-use tokio::io::BufReader;
+use regex::Regex;
+use serde::{Deserialize, Deserializer};
+use tokio::io::{AsyncBufReadExt, BufReader};
 
 use crate::config::Config;
 use crate::config::cli;
@@ -37,12 +37,32 @@ pub struct File {
 
     #[merge(rename = "client-id")]
     client_id: Option<Overridable<String>>,
+
+    filter: Option<HashMap<String, Overridable<MetadataFilter>>>,
+}
+
+#[derive(Debug, Deserialize, Merge)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct MetadataFilter {
+    #[serde(deserialize_with = "deserialize_overridable_regex")]
+    r#match: Overridable<Regex>,
+
+    #[serde(default)]
+    invert: Overridable<bool>,
 }
 
 pub async fn run(config: Config) -> Result<ExitCode> {
     let cli::Command::MprisBridge(ref command) = config.command else {
         unreachable!()
     };
+
+    let filters = config
+        .mpris_bridge
+        .filter
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(k, v)| (k, v.into_value()))
+        .collect();
 
     let mut playerctl = tokio::process::Command::new(
         env::var_os("_playerctl")
@@ -103,6 +123,14 @@ pub async fn run(config: Config) -> Result<ExitCode> {
                 continue;
             }
         };
+
+        if !record_matches(&record, &filters) {
+            last_track_id = None;
+            track_change = None;
+
+            discord.clear_activity().await?;
+            continue;
+        }
 
         if last_track_id
             .as_deref()
@@ -171,9 +199,10 @@ mod metadata {
         r#""player":"{{markup_escape(playerName)}}","#,
         r#""status":"{{lc(status)}}","#,
         r#""track_id":"{{markup_escape(mpris:trackid)}}","#,
-        r#""title":"{{markup_escape(title)}}","#,
-        r#""album":"{{markup_escape(album)}}","#,
-        r#""artist":"{{markup_escape(artist)}}","#,
+        r#""title":"{{markup_escape(xesam:title)}}","#,
+        r#""album":"{{markup_escape(xesam:album)}}","#,
+        r#""artist":"{{markup_escape(xesam:artist)}}","#,
+        r#""url":"{{markup_escape(xesam:url)}}","#,
         r#""art_url":"{{markup_escape(mpris:artUrl)}}","#,
         r#""position":"{{position}}","#,
         r#""length":"{{mpris:length}}""#,
@@ -191,6 +220,8 @@ mod metadata {
         pub album: Option<String>,
         #[serde(deserialize_with = "none_if_empty")]
         pub artist: Option<String>,
+        #[serde(deserialize_with = "none_if_empty")]
+        pub url: Option<String>,
         #[serde(deserialize_with = "none_if_empty")]
         pub art_url: Option<String>,
         #[serde(deserialize_with = "none_if_empty_str_us")]
@@ -237,6 +268,70 @@ mod metadata {
     }
 }
 
+fn record_matches(record: &metadata::Record, filters: &HashMap<String, MetadataFilter>) -> bool {
+    let metadata::Record {
+        player,
+        status,
+        track_id,
+        title,
+        album,
+        artist,
+        url,
+        art_url,
+        position,
+        length,
+    } = record;
+
+    // We can't match these.
+    let _ = (position, length);
+
+    let match_str = |name: &str, value: &str| -> bool {
+        filters
+            .get(name)
+            .map(|filter| metadata_filter_matches(filter, value))
+            .unwrap_or(true)
+    };
+
+    let match_optional_str = |name: &str, value: Option<&str>| -> bool {
+        match (value, filters.get(name)) {
+            (Some(value), Some(filter)) => metadata_filter_matches(filter, value),
+            (Some(_), None) => true,
+            (None, Some(_)) => false,
+            (None, None) => true,
+        }
+    };
+
+    match_str("player", player)
+        && match_str(
+            "status",
+            match status {
+                metadata::Status::Playing => "playing",
+                metadata::Status::Paused => "paused",
+                metadata::Status::Stopped => "stopped",
+            },
+        )
+        && match_str("track_id", track_id)
+        && match_optional_str("title", title.as_deref())
+        && match_optional_str("album", album.as_deref())
+        && match_optional_str("artist", artist.as_deref())
+        && match_optional_str("url", url.as_deref())
+        && match_optional_str("art_url", art_url.as_deref())
+}
+
+fn metadata_filter_matches(filter: &MetadataFilter, value: &str) -> bool {
+    let MetadataFilter {
+        ref r#match,
+        invert,
+    } = *filter;
+
+    let matches = r#match.is_match(value);
+
+    match invert.into_value() {
+        false => matches,
+        true => !matches,
+    }
+}
+
 fn capitalize_words(s: &str) -> String {
     let s = s.trim();
 
@@ -259,4 +354,15 @@ fn capitalize_words(s: &str) -> String {
     }
 
     out
+}
+
+fn deserialize_overridable_regex<'de, D>(deserializer: D) -> Result<Overridable<Regex>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Overridable::<String>::deserialize(deserializer)?;
+
+    Regex::new(&value)
+        .map(|x| Overridable::with_priority(x, value.priority()))
+        .map_err(serde::de::Error::custom)
 }
