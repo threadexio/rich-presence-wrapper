@@ -14,12 +14,14 @@ use crate::cli::Args;
 use crate::config::Config;
 use crate::util::{ExtendTuple, PathJoin, config_dir};
 
+#[macro_use]
+mod util;
+
 mod app;
 mod cli;
 mod config;
 mod discord;
 mod platform;
-mod util;
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -54,10 +56,7 @@ fn _main() -> Result<ExitCode> {
 
     let config = Config::read(&config_path)?;
 
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
+    let rt = tokio::runtime::LocalRuntime::new().unwrap();
 
     let all = (&args, &config);
 

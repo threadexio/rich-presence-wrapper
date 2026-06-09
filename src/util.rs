@@ -1,8 +1,13 @@
+#![allow(dead_code)]
+
 use std::cmp::min;
+use std::future::pending;
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, ExitStatus};
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use tokio::time::{Instant, sleep_until};
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -124,3 +129,95 @@ impl_extend_tuple!(T1, T2, T3, T4, T5);
 impl_extend_tuple!(T1, T2, T3, T4, T5, T6);
 impl_extend_tuple!(T1, T2, T3, T4, T5, T6, T7);
 impl_extend_tuple!(T1, T2, T3, T4, T5, T6, T7, T8);
+
+///////////////////////////////////////////////////////////////////////////////
+
+#[macro_export]
+macro_rules! try2 {
+    (async move $e:block) => {
+        (async move { $e }).await
+    };
+    (async $e:block) => {
+        (async { $e }).await
+    };
+    (move $e:block) => {
+        (move || $e)()
+    };
+    ($e:block) => {
+        (|| $e)()
+    };
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+pub struct OneshotTimer {
+    duration: Duration,
+    started_at: Option<Instant>,
+}
+
+impl OneshotTimer {
+    pub fn new(duration: Duration) -> Self {
+        Self {
+            duration,
+            started_at: None,
+        }
+    }
+
+    pub fn duration(&self) -> Duration {
+        self.duration
+    }
+
+    pub fn set_duration(&mut self, duration: Duration) {
+        self.duration = duration;
+    }
+
+    pub fn deadline(&self) -> Option<Instant> {
+        self.started_at.map(|x| x + self.duration)
+    }
+
+    pub fn expired(&self) -> bool {
+        self.deadline().is_some_and(|x| Instant::now() > x)
+    }
+
+    pub fn started(&self) -> bool {
+        self.started_at.is_some()
+    }
+
+    pub async fn wait(&mut self) {
+        match self.deadline() {
+            Some(deadline) => {
+                sleep_until(deadline).await;
+                self.started_at = None;
+            }
+            None => pending().await,
+        }
+    }
+
+    pub fn restart(&mut self) {
+        self.started_at = Some(Instant::now());
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+pub fn capitalize_words(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+
+    let mut last: Option<char> = None;
+
+    for c in s.chars() {
+        match (last, c) {
+            (Some(last), c) => match (last.is_whitespace(), c.is_whitespace()) {
+                (false, _) => out.push(c),
+                (true, false) => out.extend(c.to_uppercase()),
+                (true, true) => {}
+            },
+
+            (None, c) => out.extend(c.to_uppercase()),
+        }
+
+        last = Some(c);
+    }
+
+    out
+}

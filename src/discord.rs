@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use discord_rich_presence::error::Error as DiscordError;
 use discord_rich_presence::{DiscordIpc, DiscordIpcClient};
-use eyre::{bail, Result};
+use eyre::{Result, bail};
 use tokio::sync::{mpsc, oneshot};
 
 pub use discord_rich_presence::activity::*;
