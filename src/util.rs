@@ -92,3 +92,35 @@ where
         path
     }
 }
+
+///////////////////////////////////////////////////////////////////////////////
+
+pub trait ExtendTuple<T> {
+    type Output;
+
+    fn extend(self, item: T) -> Self::Output;
+}
+
+macro_rules! impl_extend_tuple {
+    ($($T:ident),*) => {
+        #[allow(non_snake_case)]
+        impl<$($T,)* T> ExtendTuple<T> for ($($T,)*) {
+            type Output = ($($T,)* T,);
+
+            fn extend(self, item: T) -> Self::Output {
+                let ($($T,)*) = self;
+                ($($T,)* item,)
+            }
+        }
+    };
+}
+
+impl_extend_tuple!();
+impl_extend_tuple!(T1);
+impl_extend_tuple!(T1, T2);
+impl_extend_tuple!(T1, T2, T3);
+impl_extend_tuple!(T1, T2, T3, T4);
+impl_extend_tuple!(T1, T2, T3, T4, T5);
+impl_extend_tuple!(T1, T2, T3, T4, T5, T6);
+impl_extend_tuple!(T1, T2, T3, T4, T5, T6, T7);
+impl_extend_tuple!(T1, T2, T3, T4, T5, T6, T7, T8);

@@ -4,20 +4,19 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use eyre::{Context, Result};
-use module::types::Overridable;
 use module::Merge;
+use module::types::Overridable;
 use serde::Deserialize;
 
 use crate::app::common::generic_editor::GenericEditor;
-use crate::config::cli;
 use crate::config::Config;
 use crate::discord::Discord;
-use crate::platform::ChildExt;
-use crate::platform::ChildHandle;
-use crate::util::exit_status_to_code;
-use crate::util::Never;
+use crate::platform::{ChildExt, ChildHandle};
+use crate::util::{Never, exit_status_to_code};
 
 const CLIENT_ID: &str = "1339918035842105417";
+
+///////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, clap::Parser)]
 #[command(name = "hx", disable_help_flag = true)]
@@ -34,11 +33,9 @@ pub struct File {
     client_id: Option<Overridable<String>>,
 }
 
-pub async fn run(config: Config) -> Result<ExitCode> {
-    let cli::Command::Helix(ref command) = config.command else {
-        unreachable!()
-    };
+///////////////////////////////////////////////////////////////////////////////
 
+pub async fn run(config: &Config, command: &Command) -> Result<ExitCode> {
     let binary_path = env::var_os("_hx")
         .map(PathBuf::from)
         .or(config.helix.path.as_deref().cloned())
@@ -51,9 +48,10 @@ pub async fn run(config: Config) -> Result<ExitCode> {
 
     tokio::spawn({
         let child = child.handle().expect("we have not waited the child");
+        let client_id = config.helix.client_id.as_deref().cloned();
 
         async move {
-            let _ = rpc_task(config, child).await;
+            let _ = rpc_task(child, client_id).await;
         }
     });
 
@@ -61,17 +59,10 @@ pub async fn run(config: Config) -> Result<ExitCode> {
     Ok(code)
 }
 
-async fn rpc_task(config: Config, editor: ChildHandle) -> Result<Never> {
+async fn rpc_task(editor: ChildHandle, client_id: Option<String>) -> Result<Never> {
     let mut generic_editor = GenericEditor {
         discord: Discord::builder()
-            .client_id(
-                config
-                    .helix
-                    .client_id
-                    .as_deref()
-                    .map(String::as_str)
-                    .unwrap_or(CLIENT_ID),
-            )
+            .client_id(client_id.as_deref().unwrap_or(CLIENT_ID))
             .finish(),
 
         editor,

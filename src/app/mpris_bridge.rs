@@ -13,12 +13,13 @@ use serde::{Deserialize, Deserializer};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 use crate::config::Config;
-use crate::config::cli;
 use crate::discord::*;
 use crate::util::SystemTimeExt;
 use crate::util::exit_status_to_code;
 
 const CLIENT_ID: &str = "1485616471035088896";
+
+///////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, clap::Parser)]
 #[command(name = "mpris-bridge")]
@@ -41,7 +42,7 @@ pub struct File {
     filter: Option<HashMap<String, Overridable<MetadataFilter>>>,
 }
 
-#[derive(Debug, Deserialize, Merge)]
+#[derive(Debug, Clone, Deserialize, Merge)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct MetadataFilter {
     #[serde(deserialize_with = "deserialize_overridable_regex")]
@@ -51,18 +52,15 @@ pub struct MetadataFilter {
     invert: Overridable<bool>,
 }
 
-pub async fn run(config: Config) -> Result<ExitCode> {
-    let cli::Command::MprisBridge(ref command) = config.command else {
-        unreachable!()
-    };
+///////////////////////////////////////////////////////////////////////////////
 
-    let filters = config
+pub async fn run(config: &Config, command: &Command) -> Result<ExitCode> {
+    let filters: HashMap<String, MetadataFilter> = config
         .mpris_bridge
         .filter
-        .unwrap_or_default()
-        .into_iter()
-        .map(|(k, v)| (k, v.into_value()))
-        .collect();
+        .as_ref()
+        .map(|x| x.iter().map(|(k, v)| (k.clone(), (**v).clone())).collect())
+        .unwrap_or_default();
 
     let mut playerctl = tokio::process::Command::new(
         env::var_os("_playerctl")
@@ -119,7 +117,7 @@ pub async fn run(config: Config) -> Result<ExitCode> {
         {
             Ok(x) => x,
             Err(e) => {
-                eprintln!("warn: {e:#}");
+                warn!("{e:#}");
                 continue;
             }
         };
