@@ -1,8 +1,8 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
-use std::process::ExitCode;
-use std::process::Stdio;
+use std::process::{ExitCode, Stdio};
 use std::time::SystemTime;
 
 use eyre::{Context, Result};
@@ -242,8 +242,8 @@ mod metadata {
     where
         D: serde::Deserializer<'de>,
     {
-        let s = <&'de str>::deserialize(deserializer)?;
-        let s = decode_html_entities(s);
+        let s = Cow::<'de, str>::deserialize(deserializer)?;
+        let s = decode_html_entities(&s);
 
         if s.is_empty() {
             Ok(None)
@@ -256,8 +256,8 @@ mod metadata {
     where
         D: serde::Deserializer<'de>,
     {
-        let s = <&'de str>::deserialize(deserializer)?;
-        let s = decode_html_entities(s);
+        let s = Cow::<'de, str>::deserialize(deserializer)?;
+        let s = decode_html_entities(&s);
 
         if s.is_empty() {
             return Ok(None);
@@ -360,7 +360,7 @@ fn deserialize_overridable_regex<'de, D>(deserializer: D) -> Result<Overridable<
 where
     D: Deserializer<'de>,
 {
-    let value = Overridable::<String>::deserialize(deserializer)?;
+    let value = Overridable::<Cow<'de, str>>::deserialize(deserializer)?;
 
     Regex::new(&value)
         .map(|x| Overridable::with_priority(x, value.priority()))
