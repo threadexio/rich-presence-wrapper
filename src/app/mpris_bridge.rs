@@ -687,6 +687,10 @@ mod rpc {
             );
         }
 
+        if let Some(url) = record.url.clone() {
+            activity = activity.buttons(vec![Button::new("Listen", url)]);
+        }
+
         if let Some(art_url) = record.art_url.clone() {
             activity = activity.assets(Assets::new().large_image(art_url));
         }
