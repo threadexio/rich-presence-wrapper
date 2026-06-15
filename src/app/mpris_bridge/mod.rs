@@ -184,45 +184,6 @@ use self::record_reader::RecordReader;
 
 ///////////////////////////////////////////////////////////////////////////////
 
-mod fixup_track_id {
-    use super::*;
-
-    pub struct FixupTrackId {
-        source: Source<Record>,
-        sink: Sink<Record>,
-    }
-
-    impl FixupTrackId {
-        pub fn new(source: Source<Record>, sink: Sink<Record>) -> Self {
-            Self { source, sink }
-        }
-
-        pub async fn run(&mut self) -> Result<()> {
-            loop {
-                let Some(mut record) = self.source.pull().await else {
-                    return Ok(());
-                };
-
-                let id = fxhash::hash64(&(
-                    &record.track_id,
-                    &record.title,
-                    &record.album,
-                    &record.artist,
-                ));
-
-                record.track_id = format!("{id:016x}");
-
-                if !self.sink.push(record) {
-                    return Ok(());
-                }
-            }
-        }
-    }
-}
-use self::fixup_track_id::FixupTrackId;
-
-///////////////////////////////////////////////////////////////////////////////
-
 mod keep_track_position {
     use super::*;
 
