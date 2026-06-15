@@ -22,7 +22,7 @@ pub struct Config {
 
     #[cfg(feature = "mpris-bridge")]
     #[merge(rename = "mpris-bridge")]
-    pub mpris_bridge: crate::app::mpris_bridge::File,
+    pub mpris_bridge: crate::app::mpris_bridge::Config,
 }
 
 impl Config {

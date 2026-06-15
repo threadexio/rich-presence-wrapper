@@ -50,16 +50,6 @@ pub enum TrackStatus {
     Stopped,
 }
 
-impl TrackStatus {
-    pub fn to_str(&self) -> &'static str {
-        match self {
-            Self::Playing => "playing",
-            Self::Paused => "paused",
-            Self::Stopped => "stopped",
-        }
-    }
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 
 mod deserialize {

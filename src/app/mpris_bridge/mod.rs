@@ -8,9 +8,7 @@ use module::Merge;
 use module::types::{Ordered, Overridable};
 use serde::Deserialize;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::task::JoinSet;
 
-use crate::config::Config;
 use crate::discord::*;
 use crate::util::{SystemTimeExt, capitalize_words};
 
@@ -20,6 +18,7 @@ use self::pipeline::{Sink, Source};
 const CLIENT_ID: &str = "1485616471035088896";
 
 mod metadata;
+mod modules;
 mod pipeline;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -36,42 +35,46 @@ pub struct Command {
 
 #[derive(Debug, Default, Deserialize, Merge)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
-pub struct File {
+pub struct Config {
     playerctl: Option<Overridable<PathBuf>>,
 
     #[merge(rename = "client-id")]
     client_id: Option<Overridable<String>>,
 
-    plugins: Option<Overridable<Ordered<Vec<PathBuf>>>>,
+    #[serde(rename = "module")]
+    #[merge(rename = "module")]
+    modules: Option<Ordered<Vec<modules::Config>>>,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
 pub async fn run(config: &Config, command: &Command) -> Result<ExitCode> {
-    let mut tasks = JoinSet::new();
+    let mut pipeline = pipeline::builder();
 
-    let p1 = pipeline::pipe();
-    let p2 = pipeline::pipe();
-    let p3 = pipeline::pipe();
+    if let Some(modules) = config.modules.as_deref() {
+        for module in modules {
+            modules::setup(&mut pipeline, module)
+                .await
+                .context("failed to setup module")?;
+        }
+    }
+
+    let (mut tasks, input, output) = pipeline.build();
 
     tasks.spawn_local({
         let playerctl = env::var_os("_playerctl")
             .map(PathBuf::from)
-            .or_else(|| config.mpris_bridge.playerctl.as_deref().cloned())
+            .or_else(|| config.playerctl.as_deref().cloned())
             .unwrap_or_else(|| PathBuf::from("playerctl"));
         let player = command.player.clone();
 
-        async move { RecordReader::new(playerctl, player, p1.0).run().await }
+        async move { RecordReader::new(playerctl, player, input).run().await }
     });
-
-    tasks.spawn_local(async move { FixupTrackId::new(p1.1, p2.0).run().await });
-    tasks.spawn_local(async move { KeepTrackPosition::new(p2.1, p3.0).run().await });
 
     tasks.spawn_local({
         let discord = Discord::builder()
             .client_id(
                 config
-                    .mpris_bridge
                     .client_id
                     .as_deref()
                     .map(String::as_str)
@@ -79,7 +82,7 @@ pub async fn run(config: &Config, command: &Command) -> Result<ExitCode> {
             )
             .finish();
 
-        async move { RpcTask::new(discord, p3.1).run().await }
+        async move { RpcTask::new(discord, output).run().await }
     });
 
     let mut errored = false;
@@ -294,10 +297,6 @@ mod keep_track_position {
     }
 }
 use self::keep_track_position::KeepTrackPosition;
-
-///////////////////////////////////////////////////////////////////////////////
-
-// TODO: plugin stage
 
 ///////////////////////////////////////////////////////////////////////////////
 

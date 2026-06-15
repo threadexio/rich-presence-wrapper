@@ -55,12 +55,6 @@ pub trait Stage<T> {
 ///////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug)]
-pub struct Pipeline<T> {
-    _marker: PhantomData<fn() -> T>,
-    stages: JoinSet<Result<()>>,
-}
-
-#[derive(Debug)]
 pub struct Builder<T> {
     _marker: PhantomData<fn() -> T>,
     stages: JoinSet<Result<()>>,
@@ -69,11 +63,10 @@ pub struct Builder<T> {
     output: Source<T>,
 }
 
-impl<T> Pipeline<T> {
-    pub fn builder() -> Builder<T> {
+impl<T> Default for Builder<T> {
+    fn default() -> Self {
         let (input, output) = pipe();
-
-        Builder {
+        Self {
             _marker: PhantomData,
             stages: JoinSet::new(),
             input,
@@ -83,7 +76,7 @@ impl<T> Pipeline<T> {
 }
 
 impl<T> Builder<T> {
-    pub fn stage<S>(mut self, stage: S) -> Self
+    pub fn stage<S>(&mut self, stage: S)
     where
         S: StageBuilder<T>,
         S::Stage: 'static,
@@ -93,11 +86,9 @@ impl<T> Builder<T> {
 
         let mut stage = stage.build(input, output);
         self.stages.spawn_local(async move { stage.run().await });
-
-        self
     }
 
-    pub fn build(self) -> (Pipeline<T>, Sink<T>, Source<T>) {
+    pub fn build(self) -> (JoinSet<Result<()>>, Sink<T>, Source<T>) {
         let Self {
             _marker,
             stages,
@@ -105,38 +96,12 @@ impl<T> Builder<T> {
             output,
         } = self;
 
-        (
-            Pipeline {
-                _marker: PhantomData,
-                stages,
-            },
-            input,
-            output,
-        )
+        (stages, input, output)
     }
 }
 
-impl<T> Pipeline<T> {
-    pub async fn wait(self) -> Result<()> {
-        let Self {
-            _marker,
-            mut stages,
-        } = self;
+///////////////////////////////////////////////////////////////////////////////
 
-        let mut error = None;
-        while let Some(r) = stages.join_next().await {
-            match r.map_err(Into::into).flatten() {
-                Ok(()) => continue,
-                Err(e) if error.is_none() => error = Some(e),
-                Err(e) => {
-                    warn!("another pipeline stage errored with: {e:#}");
-                }
-            }
-        }
-
-        match error {
-            None => Ok(()),
-            Some(e) => Err(e),
-        }
-    }
+pub fn builder<T>() -> Builder<T> {
+    Builder::default()
 }

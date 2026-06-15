@@ -69,7 +69,13 @@ fn _main() -> Result<ExitCode> {
             cli::Command::Zed(x) => apply(app::zed::run, all.extend(x)).await,
 
             #[cfg(feature = "mpris-bridge")]
-            cli::Command::MprisBridge(x) => apply(app::mpris_bridge::run, all.extend(x)).await,
+            cli::Command::MprisBridge(x) => {
+                apply(
+                    app::mpris_bridge::run,
+                    all.extend(x).extend(&config.mpris_bridge),
+                )
+                .await
+            }
         }
     });
 
