@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use eyre::Result;
 use serde::Deserialize;
 
@@ -7,18 +9,31 @@ use super::super::pipeline::{self, Sink, Source, Stage, StageBuilder};
 ///////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Deserialize)]
+#[serde(default)]
 pub struct Config {
-    #[serde(flatten)]
-    pub sensitivity: Sensitivity,
+    pub sensitivity: HashSet<Sensitivity>,
 }
 
-#[derive(Debug, Default, Clone, Deserialize)]
-#[serde(default)]
-pub struct Sensitivity {
-    pub track_id: bool,
-    pub title: bool,
-    pub album: bool,
-    pub artist: bool,
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            sensitivity: HashSet::from_iter([
+                Sensitivity::TrackId,
+                Sensitivity::Title,
+                Sensitivity::Album,
+                Sensitivity::Artist,
+            ]),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Sensitivity {
+    TrackId,
+    Title,
+    Album,
+    Artist,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -34,7 +49,7 @@ pub async fn setup(pipeline: &mut pipeline::Builder<Record>, config: &Config) ->
 ///////////////////////////////////////////////////////////////////////////////
 
 struct FixupTrackIdBuilder {
-    sensitivity: Sensitivity,
+    sensitivity: HashSet<Sensitivity>,
 }
 
 impl StageBuilder<Record> for FixupTrackIdBuilder {
@@ -52,7 +67,7 @@ impl StageBuilder<Record> for FixupTrackIdBuilder {
 }
 
 struct FixupTrackId {
-    sensitivity: Sensitivity,
+    sensitivity: HashSet<Sensitivity>,
     source: Source<Record>,
     sink: Sink<Record>,
 }
@@ -64,34 +79,44 @@ impl Stage<Record> for FixupTrackId {
                 return Ok(());
             };
 
-            let hash = fxhash::hash64(&(
-                if self.sensitivity.track_id {
-                    record.track_id.as_str()
-                } else {
-                    ""
-                },
-                if self.sensitivity.title {
-                    record.title.as_deref().unwrap_or_default()
-                } else {
-                    ""
-                },
-                if self.sensitivity.album {
-                    record.album.as_deref().unwrap_or_default()
-                } else {
-                    ""
-                },
-                if self.sensitivity.artist {
-                    record.artist.as_deref().unwrap_or_default()
-                } else {
-                    ""
-                },
-            ));
-
-            record.track_id = format!("{hash:016x}");
+            record.track_id = format!("{:016x}", self.hash_record(&record));
 
             if !self.sink.push(record) {
                 return Ok(());
             }
         }
+    }
+}
+
+impl FixupTrackId {
+    fn hash_record(&self, record: &Record) -> u64 {
+        fxhash::hash64(&(
+            if self.sensitivity.contains(&Sensitivity::TrackId) {
+                record.track_id.as_str()
+            } else {
+                ""
+            },
+            if self.sensitivity.contains(&Sensitivity::Title)
+                && let Some(x) = record.title.as_deref()
+            {
+                x
+            } else {
+                ""
+            },
+            if self.sensitivity.contains(&Sensitivity::Album)
+                && let Some(x) = record.album.as_deref()
+            {
+                x
+            } else {
+                ""
+            },
+            if self.sensitivity.contains(&Sensitivity::Artist)
+                && let Some(x) = record.artist.as_deref()
+            {
+                x
+            } else {
+                ""
+            },
+        ))
     }
 }
