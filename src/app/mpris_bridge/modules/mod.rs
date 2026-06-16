@@ -10,10 +10,9 @@ use super::pipeline;
 ///////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "lowercase", tag = "type")]
+#[serde(rename_all = "kebab-case", tag = "type")]
 pub enum Config {
     Rewrite(Box<rewrite::Config>),
-    #[serde(rename = "fixup-track-id")]
     FixupTrackId(fixup_track_id::Config),
 }
 
