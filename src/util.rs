@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::borrow::Cow;
 use std::cmp::min;
 use std::future::pending;
 use std::path::{Path, PathBuf};
@@ -7,6 +8,8 @@ use std::process::{ExitCode, ExitStatus};
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use regex::Regex;
+use serde::Deserialize;
 use tokio::time::{Instant, sleep_until};
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -230,4 +233,14 @@ pub const fn r#false() -> bool {
 
 pub const fn r#true() -> bool {
     true
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+pub fn deserialize_regex<'de, D>(deserializer: D) -> Result<Regex, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let pattern = Cow::<'de, str>::deserialize(deserializer)?;
+    Regex::new(&pattern).map_err(serde::de::Error::custom)
 }

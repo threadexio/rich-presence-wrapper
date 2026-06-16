@@ -1,6 +1,7 @@
 use eyre::{Context, Result};
 use serde::Deserialize;
 
+mod filter;
 mod fixup_track_id;
 mod rewrite;
 mod track_position;
@@ -28,6 +29,7 @@ pub struct Config {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case", tag = "type")]
 enum Module {
+    Filter(Box<filter::Config>),
     FixupTrackId(fixup_track_id::Config),
     Rewrite(Box<rewrite::Config>),
     TrackPosition(track_position::Config),
@@ -42,6 +44,8 @@ pub async fn setup(pipeline: &mut pipeline::Builder<Record>, config: &Config) ->
 
     use Module::*;
     match &config.module {
+        Filter(x) => filter::setup(pipeline, x).await.context("filter"),
+
         FixupTrackId(x) => fixup_track_id::setup(pipeline, x)
             .await
             .context("fixup-track-id"),

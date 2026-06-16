@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use eyre::Result;
 use regex::Regex;
 use serde::Deserialize;
@@ -27,7 +25,7 @@ struct RewriteRuleSet {
 
 #[derive(Debug, Clone, Deserialize)]
 struct RewriteRule {
-    #[serde(deserialize_with = "deserialize_regex")]
+    #[serde(deserialize_with = "crate::util::deserialize_regex")]
     pattern: Regex,
     rewrite: String,
 }
@@ -124,14 +122,4 @@ impl RewriteStage {
             length: record.length,
         }
     }
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-fn deserialize_regex<'de, D>(deserializer: D) -> Result<Regex, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let pattern = Cow::<'de, str>::deserialize(deserializer)?;
-    Regex::new(&pattern).map_err(serde::de::Error::custom)
 }

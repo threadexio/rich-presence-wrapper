@@ -1,7 +1,7 @@
 use std::env;
 use std::path::PathBuf;
 use std::process::{ExitCode, Stdio};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use eyre::{Context, Result, bail};
 use module::Merge;
