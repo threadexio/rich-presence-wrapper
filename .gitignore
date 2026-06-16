@@ -1,2 +1,6 @@
-/target
-/result
+target
+
+result
+result-*
+
+config.toml
