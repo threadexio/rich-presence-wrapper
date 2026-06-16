@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::time::{Duration, SystemTime};
 
 use eyre::Result;
@@ -93,8 +94,8 @@ impl Stage<Record> for TrackPosition {
                 (TrackStatus::Paused | TrackStatus::Stopped, None) => {}
             }
 
-            if record.length.is_some() {
-                record.position = Some(current_track.position);
+            if let Some(length) = record.length {
+                record.position = Some(min(current_track.position, length));
             }
 
             if !self.sink.push(record) {
