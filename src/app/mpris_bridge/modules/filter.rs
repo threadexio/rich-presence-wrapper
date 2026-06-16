@@ -69,7 +69,7 @@ struct FilterStage {
 }
 
 impl Stage<Record> for FilterStage {
-    async fn run(&mut self) -> eyre::Result<()> {
+    async fn run(&mut self) -> Result<()> {
         loop {
             let Some(record) = self.source.pull().await else {
                 return Ok(());

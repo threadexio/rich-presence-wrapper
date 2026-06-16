@@ -1,4 +1,5 @@
-use std::{ops::ControlFlow, time::Duration};
+use std::ops::ControlFlow;
+use std::time::Duration;
 
 use eyre::Result;
 use serde::Deserialize;

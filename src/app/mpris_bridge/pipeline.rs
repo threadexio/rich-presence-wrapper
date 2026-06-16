@@ -1,7 +1,9 @@
-use std::{marker::PhantomData, mem::replace};
+use std::marker::PhantomData;
+use std::mem::replace;
 
 use eyre::Result;
-use tokio::{sync::watch, task::JoinSet};
+use tokio::sync::watch;
+use tokio::task::JoinSet;
 
 ///////////////////////////////////////////////////////////////////////////////
 
