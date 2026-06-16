@@ -4,6 +4,11 @@ use serde::Deserialize;
 mod fixup_track_id;
 mod rewrite;
 
+mod prelude {
+    pub(super) use super::super::metadata::*;
+    pub(super) use super::super::pipeline::{self, Sink, Source, Stage, StageBuilder};
+}
+
 use super::metadata::Record;
 use super::pipeline;
 

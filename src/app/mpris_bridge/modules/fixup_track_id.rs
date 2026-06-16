@@ -3,8 +3,7 @@ use std::collections::HashSet;
 use eyre::Result;
 use serde::Deserialize;
 
-use super::super::metadata::Record;
-use super::super::pipeline::{self, Sink, Source, Stage, StageBuilder};
+use super::prelude::*;
 
 ///////////////////////////////////////////////////////////////////////////////
 

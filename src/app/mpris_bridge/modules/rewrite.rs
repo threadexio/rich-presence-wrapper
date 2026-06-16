@@ -4,8 +4,7 @@ use eyre::Result;
 use regex::Regex;
 use serde::Deserialize;
 
-use super::super::metadata::Record;
-use super::super::pipeline::{self, Sink, Source, Stage, StageBuilder};
+use super::prelude::*;
 
 ///////////////////////////////////////////////////////////////////////////////
 
