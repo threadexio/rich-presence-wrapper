@@ -31,6 +31,9 @@ pub struct Command {
         help = "Specify which MPRIS players to bridge. Will be passed to `playerctl`'s `--player`."
     )]
     player: Option<String>,
+
+    #[clap(long, help = "Do not publish Rich Presence to Discord.")]
+    dry_run: bool,
 }
 
 #[derive(Debug, Default, Deserialize, Merge)]
@@ -82,7 +85,9 @@ pub async fn run(config: &Config, command: &Command) -> Result<ExitCode> {
             )
             .finish();
 
-        async move { RpcTask::new(discord, output).run().await }
+        let dry_run = command.dry_run;
+
+        async move { RpcTask::new(discord, dry_run, output).run().await }
     });
 
     let mut errored = false;
@@ -266,12 +271,17 @@ mod rpc_task {
 
     pub struct RpcTask {
         discord: Discord,
+        dry_run: bool,
         source: Source<Record>,
     }
 
     impl RpcTask {
-        pub fn new(discord: Discord, source: Source<Record>) -> Self {
-            Self { discord, source }
+        pub fn new(discord: Discord, dry_run: bool, source: Source<Record>) -> Self {
+            Self {
+                discord,
+                dry_run,
+                source,
+            }
         }
 
         pub async fn run(&mut self) -> Result<()> {
@@ -282,18 +292,20 @@ mod rpc_task {
 
                 trace!("<- {record:#?}");
 
-                match self.build_activity(record) {
-                    Some(activity) => self
-                        .discord
-                        .set_activity(activity)
-                        .await
-                        .context("failed to set activity")?,
+                if !self.dry_run {
+                    match self.build_activity(record) {
+                        Some(activity) => self
+                            .discord
+                            .set_activity(activity)
+                            .await
+                            .context("failed to set activity")?,
 
-                    None => self
-                        .discord
-                        .clear_activity()
-                        .await
-                        .context("faled to clear activity")?,
+                        None => self
+                            .discord
+                            .clear_activity()
+                            .await
+                            .context("faled to clear activity")?,
+                    }
                 }
             }
         }
