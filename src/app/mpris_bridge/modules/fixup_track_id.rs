@@ -11,7 +11,7 @@ use super::super::pipeline::{self, Sink, Source, Stage, StageBuilder};
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Config {
-    pub sensitivity: HashSet<Sensitivity>,
+    sensitivity: HashSet<Sensitivity>,
 }
 
 impl Default for Config {
@@ -29,7 +29,7 @@ impl Default for Config {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum Sensitivity {
+enum Sensitivity {
     TrackId,
     Title,
     Album,

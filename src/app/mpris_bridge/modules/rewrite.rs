@@ -12,25 +12,25 @@ use super::super::pipeline::{self, Sink, Source, Stage, StageBuilder};
 #[derive(Debug, Deserialize)]
 pub struct Config {
     #[serde(flatten)]
-    pub rules: RewriteRuleSet,
+    rules: RewriteRuleSet,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct RewriteRuleSet {
-    pub player: Option<RewriteRule>,
-    pub track_id: Option<RewriteRule>,
-    pub title: Option<RewriteRule>,
-    pub album: Option<RewriteRule>,
-    pub artist: Option<RewriteRule>,
-    pub url: Option<RewriteRule>,
-    pub art_url: Option<RewriteRule>,
+struct RewriteRuleSet {
+    player: Option<RewriteRule>,
+    track_id: Option<RewriteRule>,
+    title: Option<RewriteRule>,
+    album: Option<RewriteRule>,
+    artist: Option<RewriteRule>,
+    url: Option<RewriteRule>,
+    art_url: Option<RewriteRule>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct RewriteRule {
+struct RewriteRule {
     #[serde(deserialize_with = "deserialize_regex")]
-    pub pattern: Regex,
-    pub rewrite: String,
+    pattern: Regex,
+    rewrite: String,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
