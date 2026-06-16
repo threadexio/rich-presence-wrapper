@@ -65,29 +65,36 @@ pub async fn run(config: &Config, command: &Command) -> Result<ExitCode> {
     let (mut tasks, input, output) = pipeline.build();
 
     tasks.spawn_local({
-        let playerctl = env::var_os("_playerctl")
-            .map(PathBuf::from)
-            .or_else(|| config.playerctl.as_deref().cloned())
-            .unwrap_or_else(|| PathBuf::from("playerctl"));
-        let player = command.player.clone();
+        let mut task = RecordReaderTask {
+            playerctl: env::var_os("_playerctl")
+                .map(PathBuf::from)
+                .or_else(|| config.playerctl.as_deref().cloned())
+                .unwrap_or_else(|| PathBuf::from("playerctl")),
 
-        async move { RecordReader::new(playerctl, player, input).run().await }
+            player: command.player.clone(),
+
+            sink: input,
+        };
+
+        async move { task.run().await }
     });
 
     tasks.spawn_local({
-        let discord = Discord::builder()
-            .client_id(
-                config
-                    .client_id
-                    .as_deref()
-                    .map(String::as_str)
-                    .unwrap_or(CLIENT_ID),
-            )
-            .finish();
+        let mut task = RpcTask {
+            discord: Discord::builder()
+                .client_id(
+                    config
+                        .client_id
+                        .as_deref()
+                        .map(String::as_str)
+                        .unwrap_or(CLIENT_ID),
+                )
+                .finish(),
+            dry_run: command.dry_run,
+            source: output,
+        };
 
-        let dry_run = command.dry_run;
-
-        async move { RpcTask::new(discord, dry_run, output).run().await }
+        async move { task.run().await }
     });
 
     let mut errored = false;
@@ -113,172 +120,143 @@ pub async fn run(config: &Config, command: &Command) -> Result<ExitCode> {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-mod record_reader {
-    use super::*;
+struct RecordReaderTask {
+    playerctl: PathBuf,
+    player: Option<String>,
+    sink: Sink<Record>,
+}
 
-    pub struct RecordReader {
-        playerctl: PathBuf,
-        player: Option<String>,
+impl RecordReaderTask {
+    pub async fn run(&mut self) -> Result<()> {
+        debug!("using playerctl binary: '{}'", self.playerctl.display());
 
-        sink: Sink<Record>,
-    }
+        let mut playerctl = tokio::process::Command::new(&self.playerctl);
 
-    impl RecordReader {
-        pub fn new(playerctl: PathBuf, player: Option<String>, sink: Sink<Record>) -> Self {
-            Self {
-                playerctl,
-                player,
-                sink,
-            }
+        if let Some(player) = self.player.as_deref() {
+            playerctl.args(["--player", player]);
         }
 
-        pub async fn run(&mut self) -> Result<()> {
-            debug!("using playerctl binary: '{}'", self.playerctl.display());
+        let mut playerctl = playerctl
+            .args(["metadata", "--follow", "--format", Record::PLAYERCTL_FORMAT])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .context("failed to spawn playerctl")?;
 
-            let mut playerctl = tokio::process::Command::new(&self.playerctl);
+        let mut reader =
+            BufReader::new(playerctl.stdout.take().expect("stdout was captured")).lines();
 
-            if let Some(player) = self.player.as_deref() {
-                playerctl.args(["--player", player]);
+        trace!("waiting for output...");
+
+        while let Some(line) = reader
+            .next_line()
+            .await
+            .context("failed to read output of playerctl")?
+        {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
             }
 
-            let mut playerctl = playerctl
-                .args(["metadata", "--follow", "--format", Record::PLAYERCTL_FORMAT])
-                .stdin(Stdio::null())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::inherit())
-                .spawn()
-                .context("failed to spawn playerctl")?;
-
-            let mut reader =
-                BufReader::new(playerctl.stdout.take().expect("stdout was captured")).lines();
-
-            trace!("waiting for output...");
-
-            while let Some(line) = reader
-                .next_line()
-                .await
-                .context("failed to read output of playerctl")?
+            let record: Record = match serde_json::from_str(line)
+                .context("failed to parse a metadata record from playerctl")
             {
-                let line = line.trim();
-                if line.is_empty() {
+                Ok(x) => x,
+                Err(e) => {
+                    warn!("{e:#}");
                     continue;
                 }
+            };
 
-                let record: Record = match serde_json::from_str(line)
-                    .context("failed to parse a metadata record from playerctl")
-                {
-                    Ok(x) => x,
-                    Err(e) => {
-                        warn!("{e:#}");
-                        continue;
-                    }
-                };
+            trace!("-> {record:#?}");
 
-                trace!("-> {record:#?}");
-
-                if !self.sink.push(record) {
-                    break;
-                }
+            if !self.sink.push(record) {
+                break;
             }
-
-            bail!("playerctl died")
         }
+
+        bail!("playerctl died")
     }
 }
-use self::record_reader::RecordReader;
 
 ///////////////////////////////////////////////////////////////////////////////
 
-mod rpc_task {
-    use super::*;
+struct RpcTask {
+    discord: Discord,
+    dry_run: bool,
+    source: Source<Record>,
+}
 
-    pub struct RpcTask {
-        discord: Discord,
-        dry_run: bool,
-        source: Source<Record>,
+impl RpcTask {
+    async fn run(&mut self) -> Result<()> {
+        loop {
+            let Some(record) = self.source.pull().await else {
+                return Ok(());
+            };
+
+            trace!("<- {record:#?}");
+
+            if !self.dry_run {
+                match self.build_activity(record) {
+                    Some(activity) => self
+                        .discord
+                        .set_activity(activity)
+                        .await
+                        .context("failed to set activity")?,
+
+                    None => self
+                        .discord
+                        .clear_activity()
+                        .await
+                        .context("faled to clear activity")?,
+                }
+            }
+        }
     }
 
-    impl RpcTask {
-        pub fn new(discord: Discord, dry_run: bool, source: Source<Record>) -> Self {
-            Self {
-                discord,
-                dry_run,
-                source,
-            }
+    fn build_activity(&self, record: Record) -> Option<Activity<'static>> {
+        if record.status == TrackStatus::Stopped {
+            return None;
         }
 
-        pub async fn run(&mut self) -> Result<()> {
-            loop {
-                let Some(record) = self.source.pull().await else {
-                    return Ok(());
-                };
+        let mut activity = Activity::new()
+            .activity_type(ActivityType::Listening)
+            .status_display_type(StatusDisplayType::Details)
+            .name(capitalize_words(&record.player));
 
-                trace!("<- {record:#?}");
-
-                if !self.dry_run {
-                    match self.build_activity(record) {
-                        Some(activity) => self
-                            .discord
-                            .set_activity(activity)
-                            .await
-                            .context("failed to set activity")?,
-
-                        None => self
-                            .discord
-                            .clear_activity()
-                            .await
-                            .context("faled to clear activity")?,
-                    }
-                }
-            }
+        if let Some(title) = record.title {
+            activity = activity.details(title);
         }
 
-        fn build_activity(&self, record: Record) -> Option<Activity<'static>> {
-            if record.status == TrackStatus::Stopped {
-                return None;
-            }
-
-            let mut activity = Activity::new()
-                .activity_type(ActivityType::Listening)
-                .status_display_type(StatusDisplayType::Details)
-                .name(capitalize_words(&record.player));
-
-            if let Some(title) = record.title {
-                activity = activity.details(title);
-            }
-
-            match (record.artist, record.album) {
-                (Some(artist), Some(album)) => {
-                    activity = activity.state(format!("{artist} • {album}"))
-                }
-                (Some(artist), None) => activity = activity.state(artist),
-                (None, Some(album)) => activity = activity.state(album),
-                (None, None) => {}
-            }
-
-            if let Some(position) = record.position
-                && let Some(length) = record.length
-            {
-                let start = SystemTime::now() - position;
-                let end = start + length;
-
-                activity = activity.timestamps(
-                    Timestamps::new()
-                        .start(start.duration_since_epoch().as_secs() as i64)
-                        .end(end.duration_since_epoch().as_secs() as i64),
-                );
-            }
-
-            if let Some(url) = record.url {
-                activity = activity.buttons(vec![Button::new("Listen", url)]);
-            }
-
-            if let Some(art_url) = record.art_url {
-                activity = activity.assets(Assets::new().large_image(art_url));
-            }
-
-            Some(activity)
+        match (record.artist, record.album) {
+            (Some(artist), Some(album)) => activity = activity.state(format!("{artist} • {album}")),
+            (Some(artist), None) => activity = activity.state(artist),
+            (None, Some(album)) => activity = activity.state(album),
+            (None, None) => {}
         }
+
+        if let Some(position) = record.position
+            && let Some(length) = record.length
+        {
+            let start = SystemTime::now() - position;
+            let end = start + length;
+
+            activity = activity.timestamps(
+                Timestamps::new()
+                    .start(start.duration_since_epoch().as_secs() as i64)
+                    .end(end.duration_since_epoch().as_secs() as i64),
+            );
+        }
+
+        if let Some(url) = record.url {
+            activity = activity.buttons(vec![Button::new("Listen", url)]);
+        }
+
+        if let Some(art_url) = record.art_url {
+            activity = activity.assets(Assets::new().large_image(art_url));
+        }
+
+        Some(activity)
     }
 }
-use self::rpc_task::RpcTask;
