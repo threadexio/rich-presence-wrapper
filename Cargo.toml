@@ -8,18 +8,18 @@ clap = { version = "4.6.0", features = ["derive", "env"] }
 dirs = { version = "6" }
 discord-rich-presence = { version = "1.1.0" }
 eyre = { version = "0.6" }
+fxhash = { version = "0.2", optional = true }
 html-escape = { version = "0.2", optional = true }
+magic-args = { version = "0.1" }
 module = { version = "0.3", features = ["derive", "serde"] }
 module-util = { version = "0.3", features = ["serde"] }
+regex = { version = "1" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", optional = true }
-toml = { version = "1" }
 tokio = { version = "1", features = ["macros", "sync", "time", "process", "rt"] }
-regex = { version = "1", optional = true }
+toml = { version = "1" }
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3" }
-magic-args = "0.1.1"
-fxhash = "0.2.1"
 
 [features]
 default = [
@@ -30,4 +30,9 @@ default = [
 
 helix = []
 zed = []
-mpris-bridge = ["dep:html-escape", "dep:serde_json", "dep:regex", "tokio/io-util"]
+mpris-bridge = [
+  "dep:fxhash",
+  "dep:html-escape",
+  "dep:serde_json",
+  "tokio/io-util"
+]
