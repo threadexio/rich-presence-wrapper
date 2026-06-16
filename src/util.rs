@@ -221,3 +221,13 @@ pub fn capitalize_words(s: &str) -> String {
 
     out
 }
+
+///////////////////////////////////////////////////////////////////////////////
+
+pub const fn r#false() -> bool {
+    false
+}
+
+pub const fn r#true() -> bool {
+    true
+}

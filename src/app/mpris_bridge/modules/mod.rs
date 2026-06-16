@@ -10,8 +10,18 @@ use super::pipeline;
 ///////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct Config {
+    #[serde(default = "crate::util::r#true")]
+    enable: bool,
+
+    #[serde(flatten)]
+    module: Module,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case", tag = "type")]
-pub enum Config {
+enum Module {
     Rewrite(Box<rewrite::Config>),
     FixupTrackId(fixup_track_id::Config),
 }
@@ -19,9 +29,14 @@ pub enum Config {
 ///////////////////////////////////////////////////////////////////////////////
 
 pub async fn setup(pipeline: &mut pipeline::Builder<Record>, config: &Config) -> Result<()> {
-    match config {
-        Config::Rewrite(x) => rewrite::setup(pipeline, x).await.context("rewrite"),
-        Config::FixupTrackId(x) => fixup_track_id::setup(pipeline, x)
+    if !config.enable {
+        return Ok(());
+    }
+
+    use Module::*;
+    match &config.module {
+        Rewrite(x) => rewrite::setup(pipeline, x).await.context("rewrite"),
+        FixupTrackId(x) => fixup_track_id::setup(pipeline, x)
             .await
             .context("fixup-track-id"),
     }
