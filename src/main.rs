@@ -5,14 +5,14 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use eyre::{ContextCompat, Result};
-use magic_args::apply;
+use magic_args::{Extend, apply};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::cli::Args;
 use crate::config::Config;
-use crate::util::{ExtendTuple, PathJoin, config_dir};
+use crate::util::{PathJoin, config_dir};
 
 #[macro_use]
 mod util;
