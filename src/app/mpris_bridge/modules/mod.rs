@@ -2,6 +2,7 @@ use eyre::{Context, Result};
 use serde::Deserialize;
 
 mod auto_stop;
+mod external;
 mod filter;
 mod fixup_track_id;
 mod rewrite;
@@ -32,6 +33,7 @@ pub struct Config {
 #[serde(rename_all = "kebab-case", tag = "type")]
 enum Module {
     AutoStop(auto_stop::Config),
+    External(external::Config),
     Filter(Box<filter::Config>),
     FixupTrackId(fixup_track_id::Config),
     Rewrite(Box<rewrite::Config>),
@@ -49,6 +51,8 @@ pub async fn setup(pipeline: &mut pipeline::Builder<Record>, config: &Config) ->
     use Module::*;
     match &config.module {
         AutoStop(x) => auto_stop::setup(pipeline, x).await.context("auto-stop"),
+
+        External(x) => external::setup(pipeline, x).await.context("external"),
 
         Filter(x) => filter::setup(pipeline, x).await.context("filter"),
 
