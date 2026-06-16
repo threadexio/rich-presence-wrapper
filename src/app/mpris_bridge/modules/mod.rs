@@ -5,6 +5,7 @@ mod auto_stop;
 mod filter;
 mod fixup_track_id;
 mod rewrite;
+mod script;
 mod track_position;
 
 mod prelude {
@@ -34,6 +35,7 @@ enum Module {
     Filter(Box<filter::Config>),
     FixupTrackId(fixup_track_id::Config),
     Rewrite(Box<rewrite::Config>),
+    Script(script::Config),
     TrackPosition(track_position::Config),
 }
 
@@ -55,6 +57,8 @@ pub async fn setup(pipeline: &mut pipeline::Builder<Record>, config: &Config) ->
             .context("fixup-track-id"),
 
         Rewrite(x) => rewrite::setup(pipeline, x).await.context("rewrite"),
+
+        Script(x) => script::setup(pipeline, x).await.context("script"),
 
         TrackPosition(x) => track_position::setup(pipeline, x)
             .await
