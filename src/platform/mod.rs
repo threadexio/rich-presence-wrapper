@@ -29,3 +29,4 @@ macro_rules! platform {
 }
 
 platform!(linux if target_os = "linux");
+platform!(darwin if target_os = "macos");

@@ -176,6 +176,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
 
 [[package]]
+name = "darwin-libproc"
+version = "0.2.0"
+source = "git+https://git.31c0.org/a-reynbaw/darwin-libproc.git?rev=2f131f4ed0934a8a41299aa421b75256f7b7dc58#2f131f4ed0934a8a41299aa421b75256f7b7dc58"
+dependencies = [
+ "darwin-libproc-sys",
+ "libc",
+ "memchr",
+]
+
+[[package]]
+name = "darwin-libproc-sys"
+version = "0.2.0"
+source = "git+https://git.31c0.org/a-reynbaw/darwin-libproc.git?rev=2f131f4ed0934a8a41299aa421b75256f7b7dc58#2f131f4ed0934a8a41299aa421b75256f7b7dc58"
+
+[[package]]
 name = "dirs"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -699,6 +714,7 @@ name = "rich-presence-wrapper"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "darwin-libproc",
  "dirs",
  "discord-rich-presence",
  "eyre",

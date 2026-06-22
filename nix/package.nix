@@ -28,7 +28,13 @@ let
         ];
       };
 
-    cargoLock.lockFile = ../Cargo.lock;
+    cargoLock = {
+      lockFile = ../Cargo.lock;
+
+      outputHashes = {
+        "darwin-libproc-0.2.0" = "sha256-jpAyODhGAFuFOjqwGdYcAIHVz/aT+IzyfzJ6Ostj2Yg=";
+      };
+    };
 
     buildNoDefaultFeatures = true;
     buildFeatures = [ ]
