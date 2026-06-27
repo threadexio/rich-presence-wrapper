@@ -11,7 +11,7 @@ use serde::Deserialize;
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#[derive(Default, Deserialize, Merge)]
+#[derive(Debug, Default, Deserialize, Merge)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct Config {
     #[cfg(feature = "helix")]

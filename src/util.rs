@@ -64,6 +64,11 @@ pub fn home_dir() -> Option<&'static Path> {
     HOME_DIR.get_or_init(dirs::home_dir).as_deref()
 }
 
+pub fn cache_dir() -> Option<&'static Path> {
+    static CACHE_DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
+    CACHE_DIR.get_or_init(dirs::cache_dir).as_deref()
+}
+
 pub fn config_dir() -> Option<&'static Path> {
     static CONFIG_DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
     CONFIG_DIR.get_or_init(dirs::config_dir).as_deref()
