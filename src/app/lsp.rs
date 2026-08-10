@@ -241,16 +241,13 @@ impl LspTask {
                     Some(format!(
                         "{}: {}",
                         repo_name.display(),
-                        relative_document_path.display()
+                        relative_document_path.display(),
                     ))
                 })
                 .or_else(|| {
                     let home = home_dir()?;
-
-                    Some(match document_path.strip_prefix(home) {
-                        Ok(x) => format!("{}", Path::new("~").join(x).display()),
-                        Err(_) => format!("{}", document_path.display()),
-                    })
+                    let document_path = document_path.strip_prefix(home).unwrap_or(document_path);
+                    Some(format!("{}", document_path.display()))
                 })
                 .unwrap_or_else(|| format!("{}", document_path.display())),
             );
