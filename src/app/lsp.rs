@@ -1,9 +1,10 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::PathBuf;
 use std::process::ExitCode;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::SystemTime;
 
-use eyre::{Context, Result};
+use eyre::{Context, ContextCompat, Result};
 use module::Merge;
 use serde::Deserialize;
 use tokio::sync::Mutex;
@@ -40,7 +41,7 @@ pub async fn run() -> Result<ExitCode> {
             documents: HashMap::new(),
             active_document: None,
 
-            last_update: None,
+            last_activity_params: None,
             discord: Discord::builder().client_id(CLIENT_ID).finish(), /* TODO: fetch client id from config file */
         }),
     });
@@ -61,7 +62,7 @@ struct State {
     documents: HashMap<Url, Document>,
     active_document: Option<Url>,
 
-    last_update: Option<Instant>,
+    last_activity_params: Option<ActivityVolatileParams>,
     discord: Discord,
 }
 
@@ -108,13 +109,13 @@ impl LanguageServer for LspTask {
 
         state.active_document = None;
         state.documents.clear();
-        self.update_presence(&mut state, true).await;
+        self.update_presence(&mut state).await;
         Ok(())
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         trace!("did_change");
-        self.set_focus(params.text_document.uri, true).await;
+        self.set_focus(params.text_document.uri).await;
     }
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
@@ -122,7 +123,7 @@ impl LanguageServer for LspTask {
         let mut state = self.state.lock().await;
         state.active_document = None;
         state.documents.remove(&params.text_document.uri);
-        self.update_presence(&mut state, true).await;
+        self.update_presence(&mut state).await;
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
@@ -138,21 +139,18 @@ impl LanguageServer for LspTask {
         );
         state.active_document = Some(uri);
 
-        self.update_presence(&mut state, true).await;
+        self.update_presence(&mut state).await;
     }
 
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
         trace!("did_save");
-        self.set_focus(params.text_document.uri, false).await;
+        self.set_focus(params.text_document.uri).await;
     }
 
     async fn hover(&self, params: HoverParams) -> tower_lsp::jsonrpc::Result<Option<Hover>> {
         trace!("hover");
-        self.set_focus(
-            params.text_document_position_params.text_document.uri,
-            false,
-        )
-        .await;
+        self.set_focus(params.text_document_position_params.text_document.uri)
+            .await;
         Ok(Some(Hover {
             contents: HoverContents::Scalar(MarkedString::String("hovering file".to_string())),
             range: None,
@@ -165,45 +163,66 @@ impl LanguageServer for LspTask {
 }
 
 impl LspTask {
-    async fn set_focus(&self, active_document: Url, important: bool) {
+    async fn set_focus(&self, active_document: Url) {
         let mut state = self.state.lock().await;
         state.active_document = Some(active_document);
-        self.update_presence(&mut state, important).await;
+        self.update_presence(&mut state).await;
     }
 
-    async fn update_presence(&self, state: &mut State, important: bool) {
-        let now = Instant::now();
-
-        if !important
-            && state.last_update.is_some_and(|x| {
-                now.saturating_duration_since(x) < Duration::from_secs(1)
-            } /* TODO: fetch from config file */)
-        {
-            trace!("skip");
-            return;
-        }
-
-        state.last_update = Some(now);
-
+    async fn update_presence(&self, state: &mut State) {
         let r = try2!(async {
-            if state.active_document.is_some() {
-                trace!("update");
+            match state.active_document.as_ref() {
+                Some(active_document_uri) => {
+                    let active_document = state
+                        .documents
+                        .get(active_document_uri)
+                        .context("active document was never opened")?;
 
-                // SAFETY: We checked the precondition above.
-                let activity = self.build_activity(state);
+                    let new_params = ActivityVolatileParams {
+                        document_path: urlencoding::decode(active_document_uri.path())
+                            .map(Cow::into_owned)
+                            .map(Into::into)
+                            .context("non-utf8 document path")?,
 
-                state
-                    .discord
-                    .set_activity(activity)
-                    .await
-                    .context("cannot update rich presence")
-            } else {
-                trace!("clear");
-                state
-                    .discord
-                    .clear_activity()
-                    .await
-                    .context("cannot clear rich presence")
+                        language: active_document.language.clone(),
+                    };
+
+                    if state
+                        .last_activity_params
+                        .as_ref()
+                        .is_some_and(|old| *old == new_params)
+                    {
+                        trace!("skip update");
+                        return Ok(());
+                    }
+
+                    let activity = build_activity(
+                        ActivityPersistentParams {
+                            client: state.client.as_deref(),
+                            start: state.start,
+                        },
+                        &new_params,
+                    );
+
+                    trace!("update");
+                    state
+                        .discord
+                        .set_activity(activity)
+                        .await
+                        .context("cannot update rich presence")?;
+
+                    state.last_activity_params = Some(new_params);
+                    Ok(())
+                }
+
+                None => {
+                    trace!("clear");
+                    state
+                        .discord
+                        .clear_activity()
+                        .await
+                        .context("cannot clear rich presence")
+                }
             }
         });
 
@@ -211,63 +230,67 @@ impl LspTask {
             error!("{e:#}");
         }
     }
+}
 
-    /// # Panics
-    ///
-    /// If `state.active_document` is `None`.
-    fn build_activity(&self, state: &State) -> Activity<'static> {
-        let State { start, .. } = state;
+struct ActivityPersistentParams<'a> {
+    client: Option<&'a str>,
+    start: SystemTime,
+}
 
-        let mut activity = Activity::new()
-            .activity_type(ActivityType::Playing)
-            .status_display_type(StatusDisplayType::Name)
-            .timestamps(Timestamps::new().start(start.duration_since_epoch().as_secs() as i64))
-            .party(Party::new().size([1, 1]));
+#[derive(PartialEq, Eq)]
+struct ActivityVolatileParams {
+    document_path: PathBuf,
+    language: String,
+}
 
-        if let Some(ref client) = state.client {
-            activity = activity.name(client.clone());
-        }
+fn build_activity(
+    persistent_params: ActivityPersistentParams<'_>,
+    volatile_params: &ActivityVolatileParams,
+) -> Activity<'static> {
+    let ActivityPersistentParams { client, start } = persistent_params;
+    let ActivityVolatileParams {
+        document_path,
+        language,
+    } = volatile_params;
 
-        if let Some(active_document) = state.active_document.as_ref() {
-            let document_path = Path::new(active_document.path());
+    let mut activity = Activity::new()
+        .activity_type(ActivityType::Playing)
+        .status_display_type(StatusDisplayType::Name)
+        .timestamps(Timestamps::new().start(start.duration_since_epoch().as_secs() as i64))
+        .party(Party::new().size([1, 1]));
 
-            activity = activity.details(
-                None.or_else(|| {
-                    let repo = find_repo_root(document_path)?;
-                    let repo_name = repo.file_name()?;
-                    let relative_document_path =
-                        document_path.strip_prefix(repo).unwrap_or(document_path);
-
-                    Some(format!(
-                        "{}: {}",
-                        repo_name.display(),
-                        relative_document_path.display(),
-                    ))
-                })
-                .or_else(|| {
-                    let home = home_dir()?;
-                    let document_path = document_path.strip_prefix(home).unwrap_or(document_path);
-                    Some(format!("{}", document_path.display()))
-                })
-                .unwrap_or_else(|| format!("{}", document_path.display())),
-            );
-
-            if let Some(branch) = get_vcs_branch(document_path.parent().unwrap_or(document_path))
-                .ok()
-                .flatten()
-            {
-                activity = activity.state(branch);
-            }
-
-            let mut assets = Assets::new();
-
-            if let Some(document) = state.documents.get(active_document) {
-                assets = assets.large_image(document.language.clone());
-            }
-
-            activity = activity.assets(assets);
-        }
-
-        activity
+    if let Some(client) = client {
+        activity = activity.name(client.to_owned());
     }
+
+    activity = activity.details(
+        None.or_else(|| {
+            let repo = find_repo_root(document_path)?;
+            let repo_name = repo.file_name()?;
+            let relative_document_path = document_path.strip_prefix(repo).unwrap_or(document_path);
+
+            Some(format!(
+                "{}: {}",
+                repo_name.display(),
+                relative_document_path.display(),
+            ))
+        })
+        .or_else(|| {
+            let home = home_dir()?;
+            let document_path = document_path.strip_prefix(home).unwrap_or(document_path);
+            Some(format!("{}", document_path.display()))
+        })
+        .unwrap_or_else(|| format!("{}", document_path.display())),
+    );
+
+    if let Some(branch) = get_vcs_branch(document_path.parent().unwrap_or(document_path))
+        .ok()
+        .flatten()
+    {
+        activity = activity.state(branch);
+    }
+
+    activity = activity.assets(Assets::new().large_image(language.clone()));
+
+    activity
 }
