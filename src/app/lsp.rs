@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::ExitCode;
-use std::time::SystemTime;
+use std::time::{Duration, Instant, SystemTime};
 
 use eyre::{Context, Result};
 use module::Merge;
 use serde::Deserialize;
-use tokio::sync::{Mutex, MutexGuard};
-use tower_lsp::lsp_types::request::*;
+use tokio::sync::Mutex;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{LanguageServer, LspService, Server};
 
@@ -41,6 +40,7 @@ pub async fn run() -> Result<ExitCode> {
             documents: HashMap::new(),
             active_document: None,
 
+            last_update: None,
             discord: Discord::builder().client_id(CLIENT_ID).finish(), /* TODO: fetch client id from config file */
         }),
     });
@@ -61,6 +61,7 @@ struct State {
     documents: HashMap<Url, Document>,
     active_document: Option<Url>,
 
+    last_update: Option<Instant>,
     discord: Discord,
 }
 
@@ -107,67 +108,13 @@ impl LanguageServer for LspTask {
 
         state.active_document = None;
         state.documents.clear();
-        self.update_presence(&mut state).await;
+        self.update_presence(&mut state, true).await;
         Ok(())
-    }
-
-    async fn code_action(
-        &self,
-        params: CodeActionParams,
-    ) -> tower_lsp::jsonrpc::Result<Option<CodeActionResponse>> {
-        trace!("code_action");
-        self.set_focus(params.text_document.uri).await;
-        Ok(None)
-    }
-
-    async fn code_lens(
-        &self,
-        params: CodeLensParams,
-    ) -> tower_lsp::jsonrpc::Result<Option<Vec<CodeLens>>> {
-        trace!("code_lens");
-        self.set_focus(params.text_document.uri).await;
-        Ok(None)
-    }
-
-    async fn color_presentation(
-        &self,
-        params: ColorPresentationParams,
-    ) -> tower_lsp::jsonrpc::Result<Vec<ColorPresentation>> {
-        trace!("color_presentation");
-        self.set_focus(params.text_document.uri).await;
-        Ok(Vec::new())
-    }
-
-    async fn completion(
-        &self,
-        params: CompletionParams,
-    ) -> tower_lsp::jsonrpc::Result<Option<CompletionResponse>> {
-        trace!("completion");
-        self.set_focus(params.text_document_position.text_document.uri)
-            .await;
-        Ok(None)
-    }
-
-    async fn diagnostic(
-        &self,
-        params: DocumentDiagnosticParams,
-    ) -> tower_lsp::jsonrpc::Result<DocumentDiagnosticReportResult> {
-        trace!("diagnostic");
-        self.set_focus(params.text_document.uri).await;
-        Ok(DocumentDiagnosticReportResult::Report(
-            DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
-                related_documents: None,
-                full_document_diagnostic_report: FullDocumentDiagnosticReport {
-                    result_id: None,
-                    items: Vec::new(),
-                },
-            }),
-        ))
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         trace!("did_change");
-        self.set_focus(params.text_document.uri).await;
+        self.set_focus(params.text_document.uri, true).await;
     }
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
@@ -175,7 +122,7 @@ impl LanguageServer for LspTask {
         let mut state = self.state.lock().await;
         state.active_document = None;
         state.documents.remove(&params.text_document.uri);
-        self.update_presence(&mut state).await;
+        self.update_presence(&mut state, true).await;
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
@@ -191,113 +138,21 @@ impl LanguageServer for LspTask {
         );
         state.active_document = Some(uri);
 
-        self.update_presence(&mut state).await;
+        self.update_presence(&mut state, true).await;
     }
 
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
         trace!("did_save");
-        self.set_focus(params.text_document.uri).await;
-    }
-
-    async fn document_color(
-        &self,
-        params: DocumentColorParams,
-    ) -> tower_lsp::jsonrpc::Result<Vec<ColorInformation>> {
-        trace!("document_color");
-        self.set_focus(params.text_document.uri).await;
-        Ok(Vec::new())
-    }
-
-    async fn document_highlight(
-        &self,
-        params: DocumentHighlightParams,
-    ) -> tower_lsp::jsonrpc::Result<Option<Vec<DocumentHighlight>>> {
-        trace!("document_highlight");
-        self.set_focus(params.text_document_position_params.text_document.uri)
-            .await;
-        Ok(None)
-    }
-
-    async fn document_link(
-        &self,
-        params: DocumentLinkParams,
-    ) -> tower_lsp::jsonrpc::Result<Option<Vec<DocumentLink>>> {
-        trace!("document_link");
-        self.set_focus(params.text_document.uri).await;
-        Ok(None)
-    }
-
-    async fn document_symbol(
-        &self,
-        params: DocumentSymbolParams,
-    ) -> tower_lsp::jsonrpc::Result<Option<DocumentSymbolResponse>> {
-        trace!("document_symbol");
-        self.set_focus(params.text_document.uri).await;
-        Ok(None)
-    }
-
-    async fn folding_range(
-        &self,
-        params: FoldingRangeParams,
-    ) -> tower_lsp::jsonrpc::Result<Option<Vec<FoldingRange>>> {
-        trace!("folding_range");
-        self.set_focus(params.text_document.uri).await;
-        Ok(None)
-    }
-
-    async fn formatting(
-        &self,
-        params: DocumentFormattingParams,
-    ) -> tower_lsp::jsonrpc::Result<Option<Vec<TextEdit>>> {
-        trace!("formatting");
-        self.set_focus(params.text_document.uri).await;
-        Ok(None)
-    }
-
-    async fn goto_declaration(
-        &self,
-        params: GotoDeclarationParams,
-    ) -> tower_lsp::jsonrpc::Result<Option<GotoDeclarationResponse>> {
-        trace!("goto_declaration");
-        self.set_focus(params.text_document_position_params.text_document.uri)
-            .await;
-        Ok(None)
-    }
-
-    async fn goto_definition(
-        &self,
-        params: GotoDefinitionParams,
-    ) -> tower_lsp::jsonrpc::Result<Option<GotoDefinitionResponse>> {
-        trace!("goto_definition");
-        self.set_focus(params.text_document_position_params.text_document.uri)
-            .await;
-        Ok(None)
-    }
-
-    async fn goto_implementation(
-        &self,
-        params: GotoImplementationParams,
-    ) -> tower_lsp::jsonrpc::Result<Option<GotoImplementationResponse>> {
-        trace!("goto_implementation");
-        self.set_focus(params.text_document_position_params.text_document.uri)
-            .await;
-        Ok(None)
-    }
-
-    async fn goto_type_definition(
-        &self,
-        params: GotoTypeDefinitionParams,
-    ) -> tower_lsp::jsonrpc::Result<Option<GotoTypeDefinitionResponse>> {
-        trace!("goto_type_definition");
-        self.set_focus(params.text_document_position_params.text_document.uri)
-            .await;
-        Ok(None)
+        self.set_focus(params.text_document.uri, false).await;
     }
 
     async fn hover(&self, params: HoverParams) -> tower_lsp::jsonrpc::Result<Option<Hover>> {
         trace!("hover");
-        self.set_focus(params.text_document_position_params.text_document.uri)
-            .await;
+        self.set_focus(
+            params.text_document_position_params.text_document.uri,
+            false,
+        )
+        .await;
         Ok(Some(Hover {
             contents: HoverContents::Scalar(MarkedString::String("hovering file".to_string())),
             range: None,
@@ -307,34 +162,29 @@ impl LanguageServer for LspTask {
     async fn initialized(&self, _params: InitializedParams) {
         trace!("initialized");
     }
-
-    async fn inlay_hint(
-        &self,
-        params: InlayHintParams,
-    ) -> tower_lsp::jsonrpc::Result<Option<Vec<InlayHint>>> {
-        trace!("inlay_hint");
-        self.set_focus(params.text_document.uri).await;
-        Ok(None)
-    }
-
-    async fn inline_value(
-        &self,
-        params: InlineValueParams,
-    ) -> tower_lsp::jsonrpc::Result<Option<Vec<InlineValue>>> {
-        trace!("inline_value");
-        self.set_focus(params.text_document.uri).await;
-        Ok(None)
-    }
 }
 
 impl LspTask {
-    async fn set_focus(&self, active_document: Url) {
+    async fn set_focus(&self, active_document: Url, important: bool) {
         let mut state = self.state.lock().await;
         state.active_document = Some(active_document);
-        self.update_presence(&mut state).await;
+        self.update_presence(&mut state, important).await;
     }
 
-    async fn update_presence(&self, state: &mut MutexGuard<'_, State>) {
+    async fn update_presence(&self, state: &mut State, important: bool) {
+        let now = Instant::now();
+
+        if !important
+            && state.last_update.is_some_and(|x| {
+                now.saturating_duration_since(x) < Duration::from_secs(1)
+            } /* TODO: fetch from config file */)
+        {
+            trace!("skip");
+            return;
+        }
+
+        state.last_update = Some(now);
+
         let r = try2!(async {
             if state.active_document.is_some() {
                 trace!("update");
