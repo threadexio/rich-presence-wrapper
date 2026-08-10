@@ -60,6 +60,9 @@ async fn _main(args: &Args) -> Result<ExitCode> {
             )
             .await
         }
+
+        #[cfg(feature = "lsp")]
+        cli::Command::Lsp(x) => apply(app::lsp::run, all.extend(x)).await,
     }
 }
 
@@ -70,6 +73,7 @@ fn main() -> ExitCode {
         cli::Command::Helix(_) => "helix",
         cli::Command::Zed(_) => "zed",
         cli::Command::MprisBridge(_) => "mpris-bridge",
+        cli::Command::Lsp(_) => "lsp",
     };
 
     let level_filter_layer = match args.log_level {
@@ -83,6 +87,7 @@ fn main() -> ExitCode {
 
     let console_fmt_layer = match args.command {
         cli::Command::Helix(_) => None,
+        cli::Command::Lsp(_) => None,
         _ => Some(tracing_subscriber::fmt::layer().compact()),
     };
 

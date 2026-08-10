@@ -1,14 +1,12 @@
-use std::io;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
 use eyre::Result;
-use tokio::process::Command;
 use tokio::time::sleep;
 
 use crate::discord::*;
 use crate::platform::ChildHandle;
-use crate::util::{home_dir, Never, SystemTimeExt};
+use crate::util::{Never, SystemTimeExt, find_repo_root, get_vcs_branch, home_dir};
 
 pub struct GenericEditor {
     pub discord: Discord,
@@ -59,7 +57,7 @@ impl GenericEditor {
 
                 activity = activity.details(format!("In {}", workspace.display()));
 
-                if let Ok(Some(vcs_branch)) = get_vcs_branch(&cwd).await {
+                if let Ok(Some(vcs_branch)) = get_vcs_branch(&cwd) {
                     activity = activity.state(vcs_branch);
                 }
             }
@@ -68,29 +66,4 @@ impl GenericEditor {
             sleep(self.options.refresh_delay).await;
         }
     }
-}
-
-fn find_repo_root(in_repo: &Path) -> Option<&Path> {
-    in_repo.ancestors().find(|p| p.join(".git").is_dir())
-}
-
-async fn get_vcs_branch(repo: &Path) -> io::Result<Option<String>> {
-    let output = Command::new("git")
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .current_dir(repo)
-        .output()
-        .await?;
-
-    let stdout = str::from_utf8(&output.stdout).map_err(invalid_data)?.trim();
-
-    if stdout.is_empty() {
-        return Ok(None);
-    }
-
-    let branch = stdout.to_owned();
-    Ok(Some(branch))
-}
-
-fn invalid_data<T>(_x: T) -> io::Error {
-    io::Error::from(io::ErrorKind::InvalidData)
 }

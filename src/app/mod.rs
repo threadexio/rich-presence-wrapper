@@ -8,3 +8,6 @@ pub mod zed;
 
 #[cfg(feature = "mpris-bridge")]
 pub mod mpris_bridge;
+
+#[cfg(feature = "lsp")]
+pub mod lsp;
