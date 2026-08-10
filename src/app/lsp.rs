@@ -151,10 +151,7 @@ impl LanguageServer for LspTask {
         trace!("hover");
         self.set_focus(params.text_document_position_params.text_document.uri)
             .await;
-        Ok(Some(Hover {
-            contents: HoverContents::Scalar(MarkedString::String("hovering file".to_string())),
-            range: None,
-        }))
+        Ok(None)
     }
 
     async fn initialized(&self, _params: InitializedParams) {
