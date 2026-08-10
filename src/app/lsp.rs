@@ -6,11 +6,13 @@ use std::time::SystemTime;
 
 use eyre::{Context, ContextCompat, Result};
 use module::Merge;
+use module::types::Overridable;
 use serde::Deserialize;
 use tokio::sync::Mutex;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{LanguageServer, LspService, Server};
 
+use crate::config::Config;
 use crate::discord::*;
 use crate::util::{SystemTimeExt, find_repo_root, get_vcs_branch, home_dir};
 
@@ -26,11 +28,21 @@ pub struct Command {}
 
 #[derive(Debug, Default, Deserialize, Merge)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
-pub struct File {}
+pub struct File {
+    #[merge(rename = "client-id")]
+    client_id: Option<Overridable<String>>,
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 
-pub async fn run() -> Result<ExitCode> {
+pub async fn run(config: &Config) -> Result<ExitCode> {
+    let client_id = config
+        .lsp
+        .client_id
+        .as_ref()
+        .map(|x| &***x)
+        .unwrap_or(CLIENT_ID);
+
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
@@ -42,7 +54,7 @@ pub async fn run() -> Result<ExitCode> {
             active_document: None,
 
             last_activity_params: None,
-            discord: Discord::builder().client_id(CLIENT_ID).finish(), /* TODO: fetch client id from config file */
+            discord: Discord::builder().client_id(client_id).finish(),
         }),
     });
 
