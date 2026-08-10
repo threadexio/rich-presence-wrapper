@@ -19,8 +19,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", optional = true }
 tokio = { version = "1", features = ["macros", "sync", "time", "process", "rt"] }
 toml = { version = "1" }
+tower-lsp = { version = "0.20", optional = true }
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3" }
+urlencoding = { version = "2.1", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 darwin-libproc = { git = "https://git.31c0.org/a-reynbaw/darwin-libproc.git", rev = "2f131f4ed0934a8a41299aa421b75256f7b7dc58" }
@@ -29,7 +31,8 @@ darwin-libproc = { git = "https://git.31c0.org/a-reynbaw/darwin-libproc.git", re
 default = [
   "helix",
   "zed",
-  "mpris-bridge"
+  "mpris-bridge",
+  "lsp"
 ]
 
 helix = []
@@ -40,4 +43,9 @@ mpris-bridge = [
   "dep:rune",
   "dep:serde_json",
   "tokio/io-util"
+]
+lsp = [
+  "dep:tower-lsp",
+  "dep:urlencoding",
+  "tokio/io-std",
 ]

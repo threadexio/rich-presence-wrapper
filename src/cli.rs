@@ -27,6 +27,28 @@ pub enum Command {
     #[cfg(feature = "mpris-bridge")]
     #[command(name = "mpris-bridge")]
     MprisBridge(crate::app::mpris_bridge::Command),
+
+    #[cfg(feature = "lsp")]
+    #[command(name = "lsp")]
+    Lsp(crate::app::lsp::Command),
+}
+
+impl Command {
+    pub fn name(&self) -> &str {
+        match self {
+            #[cfg(feature = "helix")]
+            Self::Helix(_) => "helix",
+
+            #[cfg(feature = "zed")]
+            Self::Zed(_) => "zed",
+
+            #[cfg(feature = "mpris-bridge")]
+            Self::MprisBridge(_) => "mpris-bridge",
+
+            #[cfg(feature = "lsp")]
+            Self::Lsp(_) => "lsp",
+        }
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////

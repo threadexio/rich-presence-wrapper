@@ -60,17 +60,14 @@ async fn _main(args: &Args) -> Result<ExitCode> {
             )
             .await
         }
+
+        #[cfg(feature = "lsp")]
+        cli::Command::Lsp(x) => apply(app::lsp::run, all.extend(x)).await,
     }
 }
 
 fn main() -> ExitCode {
     let args = Args::parse();
-
-    let app_name = match args.command {
-        cli::Command::Helix(_) => "helix",
-        cli::Command::Zed(_) => "zed",
-        cli::Command::MprisBridge(_) => "mpris-bridge",
-    };
 
     let level_filter_layer = match args.log_level {
         cli::LogLevel::Off => LevelFilter::OFF,
@@ -82,7 +79,12 @@ fn main() -> ExitCode {
     };
 
     let console_fmt_layer = match args.command {
+        #[cfg(feature = "helix")]
         cli::Command::Helix(_) => None,
+
+        #[cfg(feature = "lsp")]
+        cli::Command::Lsp(_) => None,
+
         _ => Some(tracing_subscriber::fmt::layer().compact()),
     };
 
@@ -109,7 +111,9 @@ fn main() -> ExitCode {
             }
         }
 
-        let log_file_path = cache_dir.as_path().join(format!("{app_name}.log"));
+        let log_file_path = cache_dir
+            .as_path()
+            .join(format!("{}.log", args.command.name()));
 
         let log_file = fs::File::options()
             .append(true)

@@ -23,6 +23,9 @@ pub struct Config {
     #[cfg(feature = "mpris-bridge")]
     #[merge(rename = "mpris-bridge")]
     pub mpris_bridge: crate::app::mpris_bridge::Config,
+
+    #[cfg(feature = "lsp")]
+    pub lsp: crate::app::lsp::File,
 }
 
 impl Config {

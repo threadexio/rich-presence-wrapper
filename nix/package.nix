@@ -7,6 +7,7 @@
 , withHelix ? true
 , withZed ? true
 , withMprisBridge ? true
+, withLsp ? true
 , ...
 }:
 
@@ -41,6 +42,7 @@ let
       ++ (lib.optional withHelix "helix")
       ++ (lib.optional withZed "zed")
       ++ (lib.optional withMprisBridge "mpris-bridge")
+      ++ (lib.optional withLsp "lsp")
     ;
 
     buildInputs = [ ]

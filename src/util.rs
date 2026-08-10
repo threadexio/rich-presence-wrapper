@@ -3,8 +3,9 @@
 use std::borrow::Cow;
 use std::cmp::min;
 use std::future::pending;
+use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{ExitCode, ExitStatus};
+use std::process::{Command, ExitCode, ExitStatus};
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -216,4 +217,28 @@ where
 {
     let pattern = Cow::<'de, str>::deserialize(deserializer)?;
     Regex::new(&pattern).map_err(serde::de::Error::custom)
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+pub fn find_repo_root(in_repo: &Path) -> Option<&Path> {
+    in_repo.ancestors().find(|p| p.join(".git").is_dir())
+}
+
+pub fn get_vcs_branch(repo: &Path) -> io::Result<Option<String>> {
+    let output = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(repo)
+        .output()?;
+
+    let stdout = str::from_utf8(&output.stdout)
+        .map_err(|_| io::Error::from(io::ErrorKind::InvalidData))?
+        .trim();
+
+    if stdout.is_empty() {
+        return Ok(None);
+    }
+
+    let branch = stdout.to_owned();
+    Ok(Some(branch))
 }
