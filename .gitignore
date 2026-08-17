@@ -1,6 +1,4 @@
-target
-
 result
 result-*
 
-config.toml
+target/

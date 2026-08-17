@@ -1,11 +1,14 @@
-{ stdenv
-, mkShell
-, rustToolchain
-, lib
-, helix
-, zed-editor
-, playerctl
-, ...
+{
+  stdenv,
+  mkShell,
+  rustToolchain,
+  lib,
+
+  # Inputs
+  helix,
+  zed-editor,
+  playerctl,
+  ...
 }:
 
 mkShell {
@@ -16,7 +19,8 @@ mkShell {
   env = {
     _hx = lib.getExe helix;
     _zeditor = lib.getExe zed-editor;
-  } // (lib.optionalAttrs stdenv.isLinux {
+  }
+  // (lib.optionalAttrs stdenv.hostPlatform.isLinux {
     _playerctl = lib.getExe playerctl;
   });
 }

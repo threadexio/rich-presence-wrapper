@@ -2,7 +2,7 @@
   description = "Discord Rich Presence wrapper";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
 
     flake-compat = {
       url = "github:NixOS/flake-compat";
@@ -16,36 +16,29 @@
   };
 
   outputs =
-    { self
-    , nixpkgs
-    , rust-overlay
-    , ...
-    }:
+    {
+      self,
+      nixpkgs,
+      rust-overlay,
+      ...
+    }@inputs:
     let
-      systems = [
-        "aarch64-linux"
-        "aarch64-darwin"
-        "x86_64-linux"
-        "x86_64-darwin"
-      ];
-
-      wrappedApps = [
-        "helix"
-        "zed-editor"
-      ];
-
       inherit (nixpkgs) lib;
 
-      mkPkgs =
-        system:
-        import nixpkgs {
-          inherit system;
-          overlays = [
-            (
-              pkgs: _:
-                let
+      systems = lib.systems.flakeExposed;
+      perSystem = f: lib.genAttrs systems f;
+      perSystem' =
+        f:
+        perSystem (
+          system:
+          f (
+            import nixpkgs {
+              inherit system;
+
+              overlays = [
+                (pkgs: _: {
                   scope = lib.makeScope pkgs.newScope (scope: {
-                    inherit self;
+                    inherit self inputs;
 
                     rust-bin = rust-overlay.lib.mkRustBin { } pkgs.buildPackages;
                     rustToolchain = scope.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
@@ -55,58 +48,57 @@
                       cargo = scope.rustToolchain;
                     };
 
-                    devshell = scope.callPackage ./nix/devshell.nix { };
-                    rich-presence-wrapper = scope.callPackage ./nix/package.nix { };
+                    nukeRefsElf = pkgs.buildPackages.callPackage ./nix/packages/nuke-refs-elf.nix { };
+
+                    devShells = {
+                      default = scope.callPackage ./nix/devshells { };
+                    };
+
+                    packages' = {
+                      default = scope.callPackage ./nix/packages { };
+
+                      inherit (scope.packages'.default)
+                        helix
+                        zed-editor
+                        ;
+                    };
+
+                    apps = lib.mapAttrs (_: package: {
+                      type = "app";
+                      program = "${lib.getExe package}";
+                    }) scope.packages';
                   });
-                in
-                {
-                  inherit (scope)
-                    rich-presence-wrapper
-                    devshell
-                    ;
-                }
-            )
-          ];
-        };
-
-      perSystem' = f: lib.genAttrs systems f;
-      perSystem = f: perSystem' (system: f (mkPkgs system));
-
-      mkApp = drv: {
-        type = "app";
-        program = lib.getExe drv;
-      };
+                })
+              ];
+            }
+          )
+        );
     in
     {
-      formatter = perSystem (pkgs: pkgs.nixpkgs-fmt);
+      formatter = perSystem' (pkgs: pkgs.nixfmt-tree);
 
-      devShells = perSystem (pkgs: {
-        default = pkgs.devshell;
-      });
-
-      packages = perSystem (pkgs: {
-        default = pkgs.rich-presence-wrapper;
-        inherit (pkgs) rich-presence-wrapper;
-      }
-      // (lib.genAttrs wrappedApps (name: pkgs.rich-presence-wrapper.passthru.${name}))
-      );
-
-      apps = perSystem' (system: lib.mapAttrs (_: mkApp) self.packages.${system});
+      devShells = perSystem' (pkgs: pkgs.scope.devShells);
+      packages = perSystem' (pkgs: pkgs.scope.packages');
+      apps = perSystem' (pkgs: pkgs.scope.apps);
 
       overlays = {
         default = pkgs: _: {
           rich-presence-wrapper = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
         };
-      }
-      // (lib.genAttrs wrappedApps (name:
-        final: prev: {
-          "${name}" = final.callPackage ./nix/${name}.nix {
-            "${name}" = lib.getAttr name prev;
-          };
-        }
-      ))
-      ;
 
-      homeModules.default = import ./nix/home-module.nix { inherit self; };
+        helix = final: prev: {
+          helix = final.callPackage ./nix/packages/helix.nix {
+            inherit (prev) helix;
+          };
+        };
+
+        zed-editor = final: prev: {
+          zed-editor = final.callPackage ./nix/packages/zed-editor.nix {
+            inherit (prev) zed-editor;
+          };
+        };
+      };
+
+      homeModules.default = import ./nix/home-modules { inherit self; };
     };
 }

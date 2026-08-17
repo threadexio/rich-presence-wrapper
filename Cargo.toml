@@ -2,6 +2,33 @@
 name = "rich-presence-wrapper"
 version = "0.1.0"
 edition = "2024"
+description = """
+Discord rich presence wrapper.
+"""
+homepage = "https://github.com/threadexio/rich-presence-wrapper"
+
+[features]
+default = [
+  "helix",
+  "zed",
+  "mpris-bridge",
+  "lsp"
+]
+
+helix = []
+zed = []
+mpris-bridge = [
+  "dep:fxhash",
+  "dep:html-escape",
+  "dep:rune",
+  "dep:serde_json",
+  "tokio/io-util"
+]
+lsp = [
+  "dep:tower-lsp",
+  "dep:urlencoding",
+  "tokio/io-std",
+]
 
 [dependencies]
 clap = { version = "4.6.0", features = ["derive", "env"] }
@@ -27,25 +54,3 @@ urlencoding = { version = "2.1", optional = true }
 [target.'cfg(target_os = "macos")'.dependencies]
 darwin-libproc = { git = "https://git.31c0.org/a-reynbaw/darwin-libproc.git", rev = "2f131f4ed0934a8a41299aa421b75256f7b7dc58" }
 
-[features]
-default = [
-  "helix",
-  "zed",
-  "mpris-bridge",
-  "lsp"
-]
-
-helix = []
-zed = []
-mpris-bridge = [
-  "dep:fxhash",
-  "dep:html-escape",
-  "dep:rune",
-  "dep:serde_json",
-  "tokio/io-util"
-]
-lsp = [
-  "dep:tower-lsp",
-  "dep:urlencoding",
-  "tokio/io-std",
-]
