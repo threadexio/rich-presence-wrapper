@@ -1,4 +1,5 @@
-{ rustPlatform
+{ stdenv
+, rustPlatform
 , callPackage
 , makeBinaryWrapper
 , lib
@@ -6,7 +7,7 @@
 , playerctl
 , withHelix ? true
 , withZed ? true
-, withMprisBridge ? true
+, withMprisBridge ? stdenv.isLinux
 , withLsp ? true
 , ...
 }:
