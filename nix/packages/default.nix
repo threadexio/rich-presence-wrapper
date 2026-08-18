@@ -61,7 +61,7 @@ let
     doCheck = false;
 
     postInstall = ''
-      nukeRefsElf $out/bin/${final.meta.mainProgram}
+      nuke-refs-elf $out/bin/${final.meta.mainProgram}
 
       wrapProgram $out/bin/${final.meta.mainProgram} \
         --inherit-argv0 \
@@ -81,7 +81,13 @@ let
       homepage = manifest.package.homepage or null;
       license = lib.licenses.asl20;
       mainProgram = final.pname;
-      platforms = lib.platforms.all;
+      platforms = lib.flatten (
+        with lib.platforms;
+        [
+          linux
+          darwin
+        ]
+      );
     };
 
     passthru =
