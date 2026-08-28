@@ -105,7 +105,7 @@ fn main() -> ExitCode {
             .join(),
         };
 
-        let config = Config::read(&config_path).unwrap();
+        let config = Config::read(&config_path).context("failed to read config")?;
         debug!("{config:#?}");
 
         let rt = tokio::runtime::LocalRuntime::new().unwrap();
