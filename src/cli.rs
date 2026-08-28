@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use clap::{CommandFactory, FromArgMatches, ValueEnum};
 
+use crate::app;
+
 ///////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -18,19 +20,19 @@ pub enum LogLevel {
 pub enum Command {
     #[cfg(feature = "helix")]
     #[command(name = "hx")]
-    Helix(crate::app::helix::Command),
+    Helix(app::helix::Command),
 
     #[cfg(feature = "zed")]
     #[command(name = "zeditor")]
-    Zed(crate::app::zed::Command),
+    Zed(app::zed::Command),
 
     #[cfg(feature = "mpris-bridge")]
     #[command(name = "mpris-bridge")]
-    MprisBridge(crate::app::mpris_bridge::Command),
+    MprisBridge(app::mpris_bridge::Command),
 
     #[cfg(feature = "lsp")]
     #[command(name = "lsp")]
-    Lsp(crate::app::lsp::Command),
+    Lsp(app::lsp::Command),
 }
 
 impl Command {
@@ -49,12 +51,16 @@ impl Command {
             Self::Lsp(_) => "lsp",
         }
     }
+
+    pub fn can_use_stdio_for_log(&self) -> bool {
+        !matches!(self, Self::Helix(_) | Self::Lsp(_))
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, clap::Parser)]
-#[command(name = env!("CARGO_BIN_NAME"), disable_help_subcommand = true)]
+#[command(name = env!("CARGO_BIN_NAME"), subcommand_required = true, disable_help_subcommand = true)]
 pub struct Args {
     #[clap(
         long,
@@ -76,23 +82,17 @@ pub struct Args {
 }
 
 impl Args {
-    pub fn parse() -> Self {
-        let app_commands: [clap::Command; _] = [
-            #[cfg(feature = "helix")]
-            crate::app::helix::Command::command(),
-            #[cfg(feature = "zed")]
-            crate::app::zed::Command::command(),
-            #[cfg(feature = "mpris-bridge")]
-            crate::app::mpris_bridge::Command::command(),
-        ];
-
-        let command = clap::Command::new(env!("CARGO_BIN_NAME"))
+    pub fn command() -> clap::Command {
+        clap::Command::new(env!("CARGO_BIN_NAME"))
             .multicall(true)
             .subcommand_required(true)
             .disable_help_subcommand(true)
-            .subcommand(Args::command())
-            .subcommands(app_commands);
+            .subcommand(<Self as clap::CommandFactory>::command())
+            .subcommands([app::helix::Command::command(), app::zed::Command::command()])
+    }
 
+    pub fn parse() -> Self {
+        let command = Self::command();
         let matches = command.get_matches();
 
         match matches.subcommand().expect("subcommand is required") {

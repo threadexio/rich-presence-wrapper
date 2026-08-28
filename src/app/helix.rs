@@ -9,7 +9,6 @@ use module::types::Overridable;
 use serde::Deserialize;
 
 use crate::app::common::generic_editor::GenericEditor;
-use crate::config::Config;
 use crate::discord::Discord;
 use crate::platform::{ChildExt, ChildHandle};
 use crate::util::{Never, exit_status_to_code};
@@ -27,7 +26,7 @@ pub struct Command {
 
 #[derive(Debug, Default, Deserialize, Merge)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
-pub struct File {
+pub struct Config {
     path: Option<Overridable<PathBuf>>,
     #[merge(rename = "client-id")]
     client_id: Option<Overridable<String>>,
@@ -38,7 +37,7 @@ pub struct File {
 pub async fn run(config: &Config, command: &Command) -> Result<ExitCode> {
     let binary_path = env::var_os("_hx")
         .map(PathBuf::from)
-        .or(config.helix.path.as_deref().cloned())
+        .or(config.path.as_deref().cloned())
         .unwrap_or_else(|| PathBuf::from("hx"));
 
     let mut child = tokio::process::Command::new(binary_path)
@@ -48,7 +47,7 @@ pub async fn run(config: &Config, command: &Command) -> Result<ExitCode> {
 
     tokio::spawn({
         let child = child.handle().expect("we have not waited the child");
-        let client_id = config.helix.client_id.as_deref().cloned();
+        let client_id = config.client_id.as_deref().cloned();
 
         async move {
             let _ = rpc_task(child, client_id).await;

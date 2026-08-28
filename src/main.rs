@@ -26,48 +26,9 @@ mod platform;
 
 ///////////////////////////////////////////////////////////////////////////////
 
-async fn _main(args: &Args) -> Result<ExitCode> {
-    trace!("{args:#?}");
-
-    let config_path = match args.config {
-        Some(ref x) => x.clone(),
-        None => [
-            config_dir().context("failed to get the user config directory")?,
-            Path::new(env!("CARGO_BIN_NAME")),
-            Path::new("config.toml"),
-        ]
-        .join(),
-    };
-
-    let config = Config::read(&config_path)?;
-
-    trace!("{config:#?}");
-
-    let all = (&args, &config);
-
-    match &args.command {
-        #[cfg(feature = "helix")]
-        cli::Command::Helix(x) => apply(app::helix::run, all.extend(x)).await,
-
-        #[cfg(feature = "zed")]
-        cli::Command::Zed(x) => apply(app::zed::run, all.extend(x)).await,
-
-        #[cfg(feature = "mpris-bridge")]
-        cli::Command::MprisBridge(x) => {
-            apply(
-                app::mpris_bridge::run,
-                all.extend(x).extend(&config.mpris_bridge),
-            )
-            .await
-        }
-
-        #[cfg(feature = "lsp")]
-        cli::Command::Lsp(x) => apply(app::lsp::run, all.extend(x)).await,
-    }
-}
-
 fn main() -> ExitCode {
     let args = Args::parse();
+    debug!("{args:#?}");
 
     let level_filter_layer = match args.log_level {
         cli::LogLevel::Off => LevelFilter::OFF,
@@ -78,15 +39,10 @@ fn main() -> ExitCode {
         cli::LogLevel::Trace => LevelFilter::TRACE,
     };
 
-    let console_fmt_layer = match args.command {
-        #[cfg(feature = "helix")]
-        cli::Command::Helix(_) => None,
-
-        #[cfg(feature = "lsp")]
-        cli::Command::Lsp(_) => None,
-
-        _ => Some(tracing_subscriber::fmt::layer().compact()),
-    };
+    let console_fmt_layer = args
+        .command
+        .can_use_stdio_for_log()
+        .then(|| tracing_subscriber::fmt::layer().compact());
 
     let (log_file_fmt_layer, log_file_fmt_handle) = tracing_subscriber::reload::Layer::new(None);
 
@@ -96,7 +52,7 @@ fn main() -> ExitCode {
         .with(log_file_fmt_layer)
         .init();
 
-    let r = try2!({
+    if let Err(e) = try2!({
         let cache_dir = cache_dir()
             .map(|x| x.join(env!("CARGO_BIN_NAME")))
             .context("cache directory not set")?;
@@ -133,17 +89,59 @@ fn main() -> ExitCode {
             .expect("subscriber should still exist");
 
         Result::<()>::Ok(())
-    });
-
-    if let Err(e) = r {
+    }) {
         warn!("{e:#}");
     }
 
-    let rt = tokio::runtime::LocalRuntime::new().unwrap();
-    let r = rt.block_on(_main(&args));
-    rt.shutdown_background();
+    match try2!({
+        let config_path = match args.config {
+            Some(ref x) => x.clone(),
+            None => [
+                config_dir().context("failed to get the user config directory")?,
+                Path::new(env!("CARGO_BIN_NAME")),
+                Path::new("config.toml"),
+            ]
+            .join(),
+        };
 
-    match r {
+        let config = Config::read(&config_path).unwrap();
+        debug!("{config:#?}");
+
+        let rt = tokio::runtime::LocalRuntime::new().unwrap();
+
+        let r = rt.block_on(async {
+            let all = (&args, &config);
+
+            match &args.command {
+                #[cfg(feature = "helix")]
+                cli::Command::Helix(x) => {
+                    apply(app::helix::run, all.extend(x).extend(&config.helix)).await
+                }
+
+                #[cfg(feature = "zed")]
+                cli::Command::Zed(x) => {
+                    apply(app::zed::run, all.extend(x).extend(&config.zed)).await
+                }
+
+                #[cfg(feature = "mpris-bridge")]
+                cli::Command::MprisBridge(x) => {
+                    apply(
+                        app::mpris_bridge::run,
+                        all.extend(x).extend(&config.mpris_bridge),
+                    )
+                    .await
+                }
+
+                #[cfg(feature = "lsp")]
+                cli::Command::Lsp(x) => {
+                    apply(app::lsp::run, all.extend(x).extend(&config.lsp)).await
+                }
+            }
+        });
+
+        rt.shutdown_background();
+        r
+    }) {
         Ok(code) => code,
         Err(e) => {
             error!("{e:#}");

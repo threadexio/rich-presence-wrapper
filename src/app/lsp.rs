@@ -12,7 +12,6 @@ use tokio::sync::Mutex;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{LanguageServer, LspService, Server};
 
-use crate::config::Config;
 use crate::discord::*;
 use crate::util::{SystemTimeExt, find_repo_root, get_vcs_branch, home_dir};
 
@@ -28,7 +27,7 @@ pub struct Command {}
 
 #[derive(Debug, Default, Deserialize, Merge)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
-pub struct File {
+pub struct Config {
     #[merge(rename = "client-id")]
     client_id: Option<Overridable<String>>,
 }
@@ -37,7 +36,6 @@ pub struct File {
 
 pub async fn run(config: &Config) -> Result<ExitCode> {
     let client_id = config
-        .lsp
         .client_id
         .as_ref()
         .map(|x| &***x)

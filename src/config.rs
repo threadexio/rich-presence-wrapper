@@ -15,17 +15,17 @@ use serde::Deserialize;
 #[serde(default, rename_all = "kebab-case")]
 pub struct Config {
     #[cfg(feature = "helix")]
-    pub helix: crate::app::helix::File,
+    pub helix: crate::app::helix::Config,
 
     #[cfg(feature = "zed")]
-    pub zed: crate::app::zed::File,
+    pub zed: crate::app::zed::Config,
 
     #[cfg(feature = "mpris-bridge")]
     #[merge(rename = "mpris-bridge")]
     pub mpris_bridge: crate::app::mpris_bridge::Config,
 
     #[cfg(feature = "lsp")]
-    pub lsp: crate::app::lsp::File,
+    pub lsp: crate::app::lsp::Config,
 }
 
 impl Config {
