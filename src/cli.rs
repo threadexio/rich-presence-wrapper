@@ -30,6 +30,10 @@ pub enum Command {
     #[command(name = "mpris-bridge")]
     MprisBridge(app::mpris_bridge::Command),
 
+    #[cfg(feature = "music-bridge")]
+    #[command(name = "music-bridge")]
+    MusicBridge(app::music_bridge::Command),
+
     #[cfg(feature = "lsp")]
     #[command(name = "lsp")]
     Lsp(app::lsp::Command),
@@ -46,6 +50,9 @@ impl Command {
 
             #[cfg(feature = "mpris-bridge")]
             Self::MprisBridge(_) => "mpris-bridge",
+
+            #[cfg(feature = "music-bridge")]
+            Self::MusicBridge(_) => "music-bridge",
 
             #[cfg(feature = "lsp")]
             Self::Lsp(_) => "lsp",

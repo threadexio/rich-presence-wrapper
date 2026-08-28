@@ -12,11 +12,13 @@ default = [
   "helix",
   "zed",
   "mpris-bridge",
+  "music-bridge",
   "lsp"
 ]
 
 helix = []
 zed = []
+
 mpris-bridge = [
   "dep:fxhash",
   "dep:html-escape",
@@ -24,6 +26,9 @@ mpris-bridge = [
   "dep:serde_json",
   "tokio/io-util"
 ]
+
+music-bridge = []
+
 lsp = [
   "dep:tower-lsp",
   "dep:urlencoding",

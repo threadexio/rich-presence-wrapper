@@ -24,6 +24,10 @@ pub struct Config {
     #[merge(rename = "mpris-bridge")]
     pub mpris_bridge: crate::app::mpris_bridge::Config,
 
+    #[cfg(feature = "music-bridge")]
+    #[merge(rename = "music-bridge")]
+    pub music_bridge: crate::app::music_bridge::Config,
+
     #[cfg(feature = "lsp")]
     pub lsp: crate::app::lsp::Config,
 }

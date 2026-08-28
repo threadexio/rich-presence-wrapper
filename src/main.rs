@@ -133,6 +133,15 @@ fn main() -> ExitCode {
                     .await
                 }
 
+                #[cfg(feature = "music-bridge")]
+                cli::Command::MusicBridge(x) => {
+                    apply(
+                        app::music_bridge::run,
+                        all.extend(x).extend(&config.music_bridge),
+                    )
+                    .await
+                }
+
                 #[cfg(feature = "lsp")]
                 cli::Command::Lsp(x) => {
                     apply(app::lsp::run, all.extend(x).extend(&config.lsp)).await
