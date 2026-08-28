@@ -127,6 +127,7 @@ macro_rules! try2 {
 
 ///////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct OneshotTimer {
     duration: Duration,
     started_at: Option<Instant>,
@@ -172,6 +173,10 @@ impl OneshotTimer {
 
     pub fn restart(&mut self) {
         self.started_at = Some(Instant::now());
+    }
+
+    pub fn stop(&mut self) {
+        self.started_at = None;
     }
 }
 

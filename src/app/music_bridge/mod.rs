@@ -1,9 +1,9 @@
 use std::process::ExitCode;
 use std::time::SystemTime;
 
+use ::module::Merge;
+use ::module::types::{Ordered, Overridable};
 use eyre::{Context, ContextCompat, Result};
-use module::Merge;
-use module::types::Overridable;
 use serde::Deserialize;
 use tokio::task::JoinSet;
 
@@ -11,6 +11,7 @@ use crate::discord::*;
 use crate::util::{SystemTimeExt, capitalize_words};
 
 mod metadata;
+mod module;
 mod pipeline;
 mod source;
 
@@ -33,12 +34,15 @@ pub struct Config {
     client_id: Option<Overridable<String>>,
 
     source: Option<Overridable<source::Config>>,
+
+    #[serde(default)]
+    module: Ordered<Vec<module::Config>>,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
 pub async fn run(config: &Config) -> Result<ExitCode> {
-    let pipeline = Pipeline::new();
+    let mut pipeline = Pipeline::new();
     let mut tasks = JoinSet::new();
 
     let source = config
@@ -47,6 +51,13 @@ pub async fn run(config: &Config) -> Result<ExitCode> {
         .cloned()
         .or_else(source::Config::default_for_platform)
         .context("there is no default source for this platform")?;
+
+    for module in config.module.iter() {
+        let module = module.clone();
+        let (source, sink) = pipeline.next();
+        tasks
+            .spawn_local(async move { module::run(&module, source, sink).await.context("module") });
+    }
 
     let discord = Discord::builder()
         .client_id(
@@ -81,6 +92,8 @@ async fn run_rpc(mut discord: Discord, mut source: Source<Metadata>) -> Result<(
         let Some(metadata) = source.pull().await else {
             return Ok(());
         };
+
+        debug!("-> {metadata:#?}");
 
         match build_activity(metadata) {
             Some(activity) => discord
