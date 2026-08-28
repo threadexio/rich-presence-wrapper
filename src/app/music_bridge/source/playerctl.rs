@@ -17,7 +17,7 @@ use super::prelude::*;
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#[derive(Debug, Clone, Deserialize, Merge)]
+#[derive(Debug, Default, Clone, Deserialize, Merge)]
 pub struct Config {
     pub command: Option<Overridable<PathBuf>>,
     pub player: Option<Overridable<String>>,

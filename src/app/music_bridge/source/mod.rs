@@ -7,6 +7,7 @@ use super::pipeline::Sink;
 
 ///////////////////////////////////////////////////////////////////////////////
 
+pub mod external;
 pub mod playerctl;
 
 mod prelude {
@@ -20,13 +21,14 @@ mod prelude {
 #[serde(rename_all = "kebab-case", tag = "kind")]
 pub enum Config {
     Playerctl(playerctl::Config),
+    External(external::Config),
 }
 
 impl Config {
     pub fn default_for_platform() -> Option<Self> {
         cfg_select! {
             target_os = "linux" => {
-                Some(Self::Playerctl(playerctl::Config { command: None, player: None }))
+                Some(Self::Playerctl(playerctl::Config::default()))
             },
 
             // TODO: add macos platform
@@ -43,6 +45,9 @@ impl Merge for Config {
         match (self, other) {
             (Self::Playerctl(a), Self::Playerctl(b)) => a.merge_ref(b),
             (Self::Playerctl(_), _) => Err(module::Error::collision()),
+
+            (Self::External(a), Self::External(b)) => a.merge_ref(b),
+            (Self::External(_), _) => Err(module::Error::collision()),
         }
     }
 }
@@ -52,5 +57,6 @@ impl Merge for Config {
 pub async fn run(config: &Config, sink: Sink<Metadata>) -> Result<()> {
     match config {
         Config::Playerctl(x) => playerctl::run(x, sink).await.context("playerctl"),
+        Config::External(x) => external::run(x, sink).await.context("external"),
     }
 }
