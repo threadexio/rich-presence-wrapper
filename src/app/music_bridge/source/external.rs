@@ -14,8 +14,8 @@ use super::prelude::*;
 
 #[derive(Debug, Clone, Deserialize, Merge)]
 pub struct Config {
-    pub command: Option<Overridable<PathBuf>>,
-    pub args: Option<Overridable<Ordered<Vec<String>>>>,
+    command: Option<Overridable<PathBuf>>,
+    args: Option<Overridable<Ordered<Vec<String>>>>,
 }
 
 ///////////////////////////////////////////////////////////////////////////////

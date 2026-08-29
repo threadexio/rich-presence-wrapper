@@ -27,7 +27,9 @@ mpris-bridge = [
   "tokio/io-util"
 ]
 
-music-bridge = []
+music-bridge = [
+  "tokio/fs"
+]
 
 lsp = [
   "dep:tower-lsp",
