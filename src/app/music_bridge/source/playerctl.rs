@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::env;
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
@@ -122,9 +121,9 @@ fn parse_metadata_line(line: &str) -> Result<Metadata> {
         .map(ToOwned::to_owned)
         .context("missing 'player' field")?;
 
-    let trackid = fields
+    let id = fields
         .next()
-        .map(none_if_empty_str)
+        .map(ToOwned::to_owned)
         .context("missing 'trackid' field")?;
 
     let status =
@@ -188,13 +187,6 @@ fn parse_metadata_line(line: &str) -> Result<Metadata> {
                 })
                 .transpose()
         })?;
-
-    let id = {
-        let mut hasher = DefaultHasher::new();
-        (&trackid, &title, &album, &artist).hash(&mut hasher);
-        let hash = hasher.finish();
-        format!("{hash:016x}")
-    };
 
     Ok(Metadata {
         player,
