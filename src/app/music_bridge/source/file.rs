@@ -52,7 +52,7 @@ pub async fn run(config: &Config, mut sink: Sink<Metadata>) -> Result<()> {
 
             debug!("parsed metadata: {metadata:#?}");
 
-            if !sink.push(metadata).await {
+            if !sink.push(metadata) {
                 return Ok(());
             }
         }

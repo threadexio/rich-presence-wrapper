@@ -66,17 +66,17 @@ impl AutoStop {
             let r = tokio::select! {
                 r = self.source.pull() => {
                     let Some(metadata) = r else { return Ok(()); };
-                    self.process_metadata(metadata).await
+                    self.process_metadata(metadata)
                 }
 
                 () = wait_if_some(&mut self.pause) => {
                     trace!("pause timer expired. stopping...");
-                    self.do_stop().await
+                    self.do_stop()
                 }
 
                 () = wait_if_some(&mut self.inactivity) => {
                     trace!("inactivity timer expired. stopping...");
-                    self.do_stop().await
+                    self.do_stop()
                 },
             };
 
@@ -86,7 +86,7 @@ impl AutoStop {
         }
     }
 
-    async fn process_metadata(&mut self, metadata: Metadata) -> ControlFlow<()> {
+    fn process_metadata(&mut self, metadata: Metadata) -> ControlFlow<()> {
         if let Some(timer) = self.inactivity.as_mut() {
             timer.restart();
         }
@@ -94,7 +94,7 @@ impl AutoStop {
         match metadata.status {
             TrackStatus::Stopped => {
                 self.playing_track = None;
-                self.emit(metadata).await
+                self.emit(metadata)
             }
 
             status => {
@@ -117,12 +117,12 @@ impl AutoStop {
                     }
                 }
 
-                self.emit(metadata).await
+                self.emit(metadata)
             }
         }
     }
 
-    async fn do_stop(&mut self) -> ControlFlow<()> {
+    fn do_stop(&mut self) -> ControlFlow<()> {
         let Some(TrackInfo { player, id }) = self.playing_track.take() else {
             return ControlFlow::Continue(());
         };
@@ -140,11 +140,10 @@ impl AutoStop {
             length: None,
             extra: HashMap::new(),
         })
-        .await
     }
 
-    async fn emit(&mut self, metadata: Metadata) -> ControlFlow<()> {
-        if self.sink.push(metadata).await {
+    fn emit(&mut self, metadata: Metadata) -> ControlFlow<()> {
+        if self.sink.push(metadata) {
             ControlFlow::Continue(())
         } else {
             ControlFlow::Break(())

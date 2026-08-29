@@ -92,7 +92,7 @@ impl TrackPosition {
                 None => current_track.position,
             });
 
-            if !self.sink.push(metadata).await {
+            if !self.sink.push(metadata) {
                 return Ok(());
             }
         }

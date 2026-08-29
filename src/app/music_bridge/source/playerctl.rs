@@ -70,7 +70,7 @@ pub async fn run(config: &Config, mut sink: Sink<Metadata>) -> Result<()> {
         let metadata = parse_metadata_line(&line).context("failed to parse metadata")?;
         debug!("playerctl parsed metadata: {metadata:#?}");
 
-        if !sink.push(metadata).await {
+        if !sink.push(metadata) {
             break;
         }
     }

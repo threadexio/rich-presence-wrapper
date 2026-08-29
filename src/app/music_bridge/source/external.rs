@@ -59,7 +59,7 @@ pub async fn run(config: &Config, mut sink: Sink<Metadata>) -> Result<()> {
         let metadata = serde_json::from_str(line).context("failed to parse metadata")?;
         debug!("parsed metadata: {metadata:#?}");
 
-        if !sink.push(metadata).await {
+        if !sink.push(metadata) {
             break;
         }
     }
