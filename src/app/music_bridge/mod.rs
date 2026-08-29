@@ -36,7 +36,23 @@ pub struct Config {
     source: Option<Overridable<source::Config>>,
 
     #[serde(default)]
-    module: Ordered<Vec<module::Config>>,
+    module: Ordered<Vec<Module>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Module {
+    #[serde(default = "crate::util::r#true")]
+    enable: bool,
+
+    #[serde(default = "default_module_order")]
+    order: i64,
+
+    #[serde(flatten)]
+    inner: module::Config,
+}
+
+fn default_module_order() -> i64 {
+    0
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -52,11 +68,17 @@ pub async fn run(config: &Config) -> Result<ExitCode> {
         .or_else(source::Config::default_for_platform)
         .context("there is no default source for this platform")?;
 
-    for module in config.module.iter() {
-        let module = module.clone();
-        let (source, sink) = pipeline.next();
-        tasks
-            .spawn_local(async move { module::run(&module, source, sink).await.context("module") });
+    {
+        let mut modules: Vec<_> = config.module.iter().filter(|x| x.enable).collect();
+        modules.sort_by_key(|x| x.order);
+
+        for module in modules {
+            let module = module.inner.clone();
+            let (source, sink) = pipeline.next();
+            tasks.spawn_local(
+                async move { module::run(&module, source, sink).await.context("module") },
+            );
+        }
     }
 
     let discord = Discord::builder()

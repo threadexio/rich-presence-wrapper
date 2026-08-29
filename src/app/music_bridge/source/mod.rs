@@ -18,7 +18,7 @@ mod prelude {
 ///////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "kebab-case", tag = "kind")]
+#[serde(rename_all = "kebab-case", tag = "type")]
 pub enum Config {
     Playerctl(playerctl::Config),
     External(external::Config),
