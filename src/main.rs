@@ -1,11 +1,10 @@
 #[macro_use]
 extern crate tracing;
 
-use std::path::Path;
 use std::process::ExitCode;
 use std::{fs, io};
 
-use eyre::{Context, ContextCompat, Result};
+use eyre::{Context, ContextCompat, Result, bail};
 use magic_args::{Extend, apply};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::layer::SubscriberExt;
@@ -13,7 +12,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::cli::Args;
 use crate::config::Config;
-use crate::util::{PathJoin, cache_dir, config_dir};
+use crate::util::cache_dir;
 
 #[macro_use]
 mod util;
@@ -97,12 +96,25 @@ fn main() -> ExitCode {
     match try2!({
         let config_path = match args.config {
             Some(ref x) => x.clone(),
-            None => [
-                config_dir().context("failed to get the user config directory")?,
-                Path::new(env!("CARGO_BIN_NAME")),
-                Path::new("config.toml"),
-            ]
-            .join(),
+            None => cfg_select! {
+                debug_assertions => {
+                    bail!("there is no default configuration file for debug builds. please specify one manually.")
+                },
+
+                _ => {
+                    {
+                        use std::path::Path;
+                        use crate::util::{PathJoin, config_dir};
+
+                        [
+                            config_dir().context("failed to get the user config directory")?,
+                            Path::new(env!("CARGO_BIN_NAME")),
+                            Path::new("config.toml"),
+                        ]
+                        .join()
+                    }
+                }
+            },
         };
 
         let config = Config::read(&config_path).context("failed to read config")?;
