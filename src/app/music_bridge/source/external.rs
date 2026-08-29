@@ -15,7 +15,9 @@ use super::prelude::*;
 #[derive(Debug, Clone, Deserialize, Merge)]
 pub struct Config {
     command: Option<Overridable<PathBuf>>,
-    args: Option<Overridable<Ordered<Vec<String>>>>,
+
+    #[serde(default)]
+    args: Overridable<Ordered<Vec<String>>>,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -23,14 +25,8 @@ pub struct Config {
 pub async fn run(config: &Config, mut sink: Sink<Metadata>) -> Result<()> {
     let command = config.command.as_deref().context("missing 'command'")?;
 
-    let args = config
-        .args
-        .as_ref()
-        .map(|x| &***x)
-        .context("missing 'args'")?;
-
     let mut child = Command::new(command)
-        .args(args)
+        .args(config.args.iter())
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
