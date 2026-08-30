@@ -1,4 +1,5 @@
 {
+  self,
   stdenv,
   rustPlatform,
   lib,
@@ -10,6 +11,7 @@
   withLsp ? true,
 
   # Inputs
+  python3,
   nukeRefsElf,
   makeBinaryWrapper,
   git,
@@ -34,6 +36,7 @@ let
           ../../src
           ../../Cargo.toml
           ../../Cargo.lock
+          ../../scripts
         ];
       };
 
@@ -54,11 +57,24 @@ let
       ++ (lib.optionals withLsp [ ]);
 
     nativeBuildInputs = [
+      python3
       nukeRefsElf
       makeBinaryWrapper
     ];
 
+    env = {
+      COMMIT = lib.elemAt (lib.splitString "-" (self.dirtyShortRev or self.shortRev)) 0;
+      DIRTY = if lib.hasAttr "dirtyRev" self then "1" else "0";
+    };
+
     doCheck = false;
+
+    preBuild = ''
+      find scripts/ -type f -executable |
+        while IFS= read -r f; do
+          patchShebangs "$f"
+        done
+    '';
 
     postInstall = ''
       nuke-refs-elf $out/bin/${final.meta.mainProgram}

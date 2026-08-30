@@ -60,7 +60,7 @@ impl Command {
 ///////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, clap::Parser)]
-#[command(name = env!("CARGO_BIN_NAME"), subcommand_required = true, disable_help_subcommand = true)]
+#[command(name = env!("CARGO_BIN_NAME"), version = crate::consts::VERSION, long_version = crate::consts::LONG_VERSION, subcommand_required = true, disable_help_subcommand = true)]
 pub struct Args {
     #[clap(
         long,

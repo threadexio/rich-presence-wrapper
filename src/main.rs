@@ -21,6 +21,7 @@ mod util;
 mod app;
 mod cli;
 mod config;
+mod consts;
 mod discord;
 mod platform;
 
