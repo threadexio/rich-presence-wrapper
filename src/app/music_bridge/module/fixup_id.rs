@@ -11,23 +11,11 @@ use super::prelude::*;
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     #[serde(default = "default_sensitivity_list")]
-    sensitivity: Vec<Field>,
+    sensitivity: Vec<Box<str>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(untagged, rename_all = "snake_case")]
-enum Field {
-    Player,
-    Id,
-    Title,
-    Album,
-    Artist,
-    Url,
-    ArtUrl,
-    Extra(Box<str>),
-}
-fn default_sensitivity_list() -> Vec<Field> {
-    vec![Field::Id, Field::Title, Field::Album, Field::Artist]
+fn default_sensitivity_list() -> Vec<Box<str>> {
+    vec!["id".into(), "title".into(), "album".into(), "artist".into()]
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -51,19 +39,33 @@ pub async fn run(
     }
 }
 
-fn hash_metadata(metadata: &Metadata, sensivity: &[Field]) -> u64 {
+fn hash_metadata(metadata: &Metadata, sensivity: &[Box<str>]) -> u64 {
+    let Metadata {
+        player,
+        id,
+        status: _,
+        title,
+        album,
+        artist,
+        url,
+        art_url,
+        position: _,
+        length: _,
+        extra,
+    } = metadata;
+
     let mut hasher = DefaultHasher::new();
 
     for field in sensivity {
-        match field {
-            Field::Player => metadata.player.hash(&mut hasher),
-            Field::Id => metadata.id.hash(&mut hasher),
-            Field::Title => metadata.title.hash(&mut hasher),
-            Field::Album => metadata.album.hash(&mut hasher),
-            Field::Artist => metadata.artist.hash(&mut hasher),
-            Field::Url => metadata.url.hash(&mut hasher),
-            Field::ArtUrl => metadata.art_url.hash(&mut hasher),
-            Field::Extra(name) => metadata.extra.get(name.as_ref()).hash(&mut hasher),
+        match field.as_ref() {
+            "player" => player.hash(&mut hasher),
+            "id" => id.hash(&mut hasher),
+            "title" => title.hash(&mut hasher),
+            "album" => album.hash(&mut hasher),
+            "artist" => artist.hash(&mut hasher),
+            "url" => url.hash(&mut hasher),
+            "art_url" => art_url.hash(&mut hasher),
+            field => extra.get(field).hash(&mut hasher),
         }
     }
 
