@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use eyre::{Result, bail};
+use eyre::Result;
 use module::Merge;
 use serde::Deserialize;
 
@@ -21,21 +21,27 @@ impl Config {
     }
 
     pub fn default_path() -> Result<PathBuf> {
+        #[allow(dead_code)]
+        fn user_config_path() -> Result<PathBuf> {
+            use crate::util::{PathJoin, config_dir};
+            use eyre::ContextCompat;
+            use std::path::Path;
+
+            Ok([
+                config_dir().context("failed to get user config directory")?,
+                Path::new(env!("CARGO_BIN_NAME")),
+                Path::new("config.toml"),
+            ]
+            .join())
+        }
+
         cfg_select! {
             debug_assertions => {
-                bail!("there is no default configuration file for debug builds. please specify one manually.")
+                eyre::bail!("there is no default configuration file for debug builds. please specify one manually.")
             },
 
             _ => {
-                use std::path::Path;
-                use crate::util::{PathJoin, config_dir};
-
-                [
-                    crate::util::config_dir().context("failed to get the user config directory")?,
-                    Path::new(env!("CARGO_BIN_NAME")),
-                    Path::new("config.toml"),
-                ]
-                .join()
+                user_config_path()
             }
         }
     }
