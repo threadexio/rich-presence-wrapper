@@ -50,20 +50,8 @@ in
         };
       };
 
-      mpris-bridge = {
-        enable = mkEnableOption "rich presence integration for MPRIS";
-
-        player = mkOption {
-          description = ''
-            Bridge streams from only this player.
-
-            Will be passed to `playerctl`'s `--player` argument.
-          '';
-
-          type = types.nullOr types.str;
-          default = null;
-          example = "vlc";
-        };
+      music-bridge = {
+        enable = mkEnableOption "rich presence integration for music";
       };
     };
   };
@@ -71,24 +59,17 @@ in
   config = lib.mkIf cfg.enable {
     xdg.configFile."rich-presence-wrapper/config.toml".source = "${configFile}";
 
-    systemd.user.services = lib.optionalAttrs cfg.mpris-bridge.enable {
-      "mpris-rich-presence" = {
+    systemd.user.services = lib.optionalAttrs cfg.music-bridge.enable {
+      "music-rich-presence" = {
         Unit = {
-          Description = "Bridge MPRIS and Rich Presence";
+          Description = "Discord Rich Presence for playing media";
           After = [ "dbus.socket" ];
           Wants = [ "dbus.socket" ];
         };
 
         Service = {
           Type = "simple";
-          ExecStart =
-            let
-              player =
-                if cfg.mpris-bridge.player != null
-                then "--player '${cfg.mpris-bridge.player}'"
-                else "";
-            in
-            "${lib.getExe cfg.package} mpris-bridge ${player}";
+          ExecStart = "${lib.getExe cfg.package} music-bridge";
         };
 
         Install = {

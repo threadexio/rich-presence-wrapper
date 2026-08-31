@@ -20,10 +20,6 @@ pub struct Config {
     #[cfg(feature = "zed")]
     pub zed: crate::app::zed::Config,
 
-    #[cfg(feature = "mpris-bridge")]
-    #[merge(rename = "mpris-bridge")]
-    pub mpris_bridge: crate::app::mpris_bridge::Config,
-
     #[cfg(feature = "music-bridge")]
     #[merge(rename = "music-bridge")]
     pub music_bridge: crate::app::music_bridge::Config,

@@ -136,15 +136,6 @@ fn main() -> ExitCode {
                     apply(app::zed::run, all.extend(x).extend(&config.zed)).await
                 }
 
-                #[cfg(feature = "mpris-bridge")]
-                cli::Command::MprisBridge(x) => {
-                    apply(
-                        app::mpris_bridge::run,
-                        all.extend(x).extend(&config.mpris_bridge),
-                    )
-                    .await
-                }
-
                 #[cfg(feature = "music-bridge")]
                 cli::Command::MusicBridge(x) => {
                     apply(

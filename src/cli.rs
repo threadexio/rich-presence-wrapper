@@ -26,10 +26,6 @@ pub enum Command {
     #[command(name = "zeditor")]
     Zed(app::zed::Command),
 
-    #[cfg(feature = "mpris-bridge")]
-    #[command(name = "mpris-bridge")]
-    MprisBridge(app::mpris_bridge::Command),
-
     #[cfg(feature = "music-bridge")]
     #[command(name = "music-bridge")]
     MusicBridge(app::music_bridge::Command),
@@ -47,9 +43,6 @@ impl Command {
 
             #[cfg(feature = "zed")]
             Self::Zed(_) => "zed",
-
-            #[cfg(feature = "mpris-bridge")]
-            Self::MprisBridge(_) => "mpris-bridge",
 
             #[cfg(feature = "music-bridge")]
             Self::MusicBridge(_) => "music-bridge",

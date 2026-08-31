@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::env;
 use std::ffi::OsStr;
 use std::fs::File;
@@ -149,12 +150,21 @@ fn features() -> impl Iterator<Item = &'static str> {
 
     CACHE
         .get_or_init(|| {
-            env::var("CARGO_CFG_FEATURE")
+            let mut x: Vec<_> = env::var("CARGO_CFG_FEATURE")
                 .unwrap()
                 .split(',')
                 .map(str::trim)
+                .filter(|x| !str::is_empty(x))
                 .map(ToOwned::to_owned)
-                .collect()
+                .collect();
+
+            x.sort_by(|a, b| match (a.as_str(), b.as_str()) {
+                ("default", _) => Ordering::Less,
+                (_, "default") => Ordering::Greater,
+                (a, b) => a.cmp(b),
+            });
+
+            x
         })
         .iter()
         .map(String::as_str)
