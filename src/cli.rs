@@ -56,11 +56,26 @@ impl Command {
 
             #[cfg(feature = "lsp")]
             Self::Lsp(_) => "lsp",
+
+            #[allow(unreachable_patterns)]
+            _ => unreachable!(),
         }
     }
 
     pub fn can_use_stdio_for_log(&self) -> bool {
-        !matches!(self, Self::Helix(_) | Self::Lsp(_))
+        let mut r = true;
+
+        #[cfg(feature = "helix")]
+        {
+            r &= !matches!(self, Self::Helix(_));
+        }
+
+        #[cfg(feature = "lsp")]
+        {
+            r &= !matches!(self, Self::Lsp(_));
+        }
+
+        r
     }
 }
 
@@ -95,7 +110,12 @@ impl Args {
             .subcommand_required(true)
             .disable_help_subcommand(true)
             .subcommand(<Self as clap::CommandFactory>::command())
-            .subcommands([app::helix::Command::command(), app::zed::Command::command()])
+            .subcommands(&[
+                #[cfg(feature = "helix")]
+                app::helix::Command::command(),
+                #[cfg(feature = "zed")]
+                app::zed::Command::command(),
+            ])
     }
 
     pub fn parse() -> Self {

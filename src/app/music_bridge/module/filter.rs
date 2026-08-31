@@ -19,7 +19,7 @@ pub struct Config {
 #[derive(Debug, Clone, Deserialize)]
 struct Filter {
     #[serde(rename = "match")]
-    #[serde(deserialize_with = "crate::util::deserialize_regex")]
+    #[serde(deserialize_with = "x::deserialize_regex")]
     pattern: Regex,
 
     #[serde(default = "crate::util::r#false")]
@@ -130,5 +130,18 @@ impl Matches<Metadata> for HashMap<String, Filter> {
                 _ => filter.matches(&extra.get(key)),
             }
         })
+    }
+}
+
+mod x {
+    use super::*;
+    use std::borrow::Cow;
+
+    pub fn deserialize_regex<'de, D>(deserializer: D) -> Result<Regex, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let pattern = Cow::<'de, str>::deserialize(deserializer)?;
+        Regex::new(&pattern).map_err(serde::de::Error::custom)
     }
 }

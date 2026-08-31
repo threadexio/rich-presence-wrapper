@@ -5,13 +5,13 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use eyre::{Context, ContextCompat, Result, bail};
-use module::{Merge, types::Overridable};
+use module::Merge;
+use module::types::Overridable;
 use serde::Deserialize;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
 use super::super::metadata::TrackStatus;
-
 use super::prelude::*;
 
 ///////////////////////////////////////////////////////////////////////////////

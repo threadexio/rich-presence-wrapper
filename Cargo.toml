@@ -11,7 +11,6 @@ homepage = "https://github.com/threadexio/rich-presence-wrapper"
 default = [
   "helix",
   "zed",
-  "mpris-bridge",
   "music-bridge",
   "lsp"
 ]
@@ -24,12 +23,21 @@ mpris-bridge = [
   "dep:html-escape",
   "dep:rune",
   "dep:serde_json",
+  "dep:regex",
   "tokio/io-util"
 ]
 
-music-bridge = [
-  "tokio/fs"
-]
+music-bridge = []
+
+"music-bridge.source.external" = ["music-bridge", "dep:serde_json", "tokio/io-util", "tokio/process"]
+"music-bridge.source.file" = ["music-bridge", "tokio/io-util", "tokio/fs"]
+"music-bridge.source.playerctl" = ["music-bridge", "tokio/io-util", "tokio/process"]
+
+"music-bridge.module.auto-stop" = ["music-bridge"]
+"music-bridge.module.external" = ["music-bridge", "dep:serde_json", "tokio/io-util", "tokio/process"]
+"music-bridge.module.filter" = ["music-bridge", "dep:regex"]
+"music-bridge.module.fixup-id" = ["music-bridge"]
+"music-bridge.module.track-position" = ["music-bridge"]
 
 lsp = [
   "dep:tower-lsp",
@@ -47,7 +55,7 @@ html-escape = { version = "0.2", optional = true }
 magic-args = { version = "0.1" }
 module = { version = "0.3", features = ["derive", "serde"] }
 module-util = { version = "0.3", features = ["serde"] }
-regex = { version = "1" }
+regex = { version = "1", optional = true }
 rune = { version = "0.14", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", optional = true }

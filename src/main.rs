@@ -158,6 +158,9 @@ fn main() -> ExitCode {
                 cli::Command::Lsp(x) => {
                     apply(app::lsp::run, all.extend(x).extend(&config.lsp)).await
                 }
+
+                #[allow(unreachable_patterns)]
+                _ => unreachable!(),
             }
         });
 
