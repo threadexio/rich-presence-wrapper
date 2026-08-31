@@ -8,6 +8,7 @@ use super::pipeline::{Sink, Source};
 
 pub mod auto_stop;
 pub mod external;
+pub mod filter;
 pub mod fixup_id;
 pub mod track_position;
 
@@ -23,6 +24,7 @@ mod prelude {
 pub enum Config {
     AutoStop(auto_stop::Config),
     External(external::Config),
+    Filter(filter::Config),
     FixupId(fixup_id::Config),
     TrackPosition(track_position::Config),
 }
@@ -34,6 +36,8 @@ pub async fn run(config: &Config, source: Source<Metadata>, sink: Sink<Metadata>
         Config::AutoStop(x) => auto_stop::run(x, source, sink).await.context("auto-stop"),
 
         Config::External(x) => external::run(x, source, sink).await.context("external"),
+
+        Config::Filter(x) => filter::run(x, source, sink).await.context("filter"),
 
         Config::FixupId(x) => fixup_id::run(x, source, sink).await.context("fixup-id"),
 
