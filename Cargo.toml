@@ -40,8 +40,8 @@ dirs = { version = "6" }
 discord-rich-presence = { version = "1.1.0" }
 eyre = { version = "0.6" }
 magic-args = { version = "0.1" }
-module = { version = "0.3", features = ["derive", "serde"] }
-module-util = { version = "0.3", features = ["serde"] }
+module = { version = "0.4", features = ["derive", "serde"] }
+module-util = { version = "0.4", features = ["serde", "toml"] }
 regex = { version = "1", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", optional = true }
