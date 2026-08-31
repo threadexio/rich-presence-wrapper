@@ -24,7 +24,9 @@ pub struct Config {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-pub async fn run(config: &Config, mut sink: Sink<Metadata>) -> Result<()> {
+pub async fn run(config: &Config, sink: Mut<Sink<Metadata>>) -> Result<()> {
+    let mut sink = sink.into_inner();
+
     let mut playerctl = Command::new(
         None.or_else(|| env::var_os("_playerctl").map(PathBuf::from))
             .or_else(|| config.command.as_deref().cloned())

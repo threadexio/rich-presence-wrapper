@@ -18,7 +18,9 @@ pub struct Config {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-pub async fn run(config: &Config, mut sink: Sink<Metadata>) -> Result<()> {
+pub async fn run(config: &Config, sink: Mut<Sink<Metadata>>) -> Result<()> {
+    let mut sink = sink.into_inner();
+
     let path = config.path.as_deref().context("missing 'path'")?;
 
     loop {

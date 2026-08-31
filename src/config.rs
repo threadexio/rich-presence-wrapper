@@ -14,18 +14,8 @@ use serde::Deserialize;
 #[derive(Debug, Default, Deserialize, Merge)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct Config {
-    #[cfg(feature = "helix")]
-    pub helix: crate::app::helix::Config,
-
-    #[cfg(feature = "zed")]
-    pub zed: crate::app::zed::Config,
-
-    #[cfg(feature = "music-bridge")]
-    #[merge(rename = "music-bridge")]
-    pub music_bridge: crate::app::music_bridge::Config,
-
-    #[cfg(feature = "lsp")]
-    pub lsp: crate::app::lsp::Config,
+    #[serde(flatten)]
+    pub app: crate::app::Config,
 }
 
 impl Config {
@@ -90,5 +80,25 @@ impl Config {
             .expect("there must be at least one value");
 
         Ok(x)
+    }
+
+    pub fn default_path() -> Result<PathBuf> {
+        cfg_select! {
+            debug_assertions => {
+                eyre::bail!("there is no default configuration file for debug builds. please specify one manually.")
+            },
+
+            _ => {
+                use std::path::Path;
+                use crate::util::{PathJoin, config_dir};
+
+                [
+                    crate::util::config_dir().context("failed to get the user config directory")?,
+                    Path::new(env!("CARGO_BIN_NAME")),
+                    Path::new("config.toml"),
+                ]
+                .join()
+            }
+        }
     }
 }

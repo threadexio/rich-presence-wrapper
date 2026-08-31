@@ -21,7 +21,11 @@ pub struct Config {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-pub async fn run(config: &Config, source: Source<Metadata>, sink: Sink<Metadata>) -> Result<()> {
+pub async fn run(
+    config: &Config,
+    source: Mut<Source<Metadata>>,
+    sink: Mut<Sink<Metadata>>,
+) -> Result<()> {
     let command = config.command.as_deref().context("missing 'command'")?;
 
     let mut child = Command::new(command)
@@ -45,8 +49,8 @@ pub async fn run(config: &Config, source: Source<Metadata>, sink: Sink<Metadata>
         stdin,
         stdout,
 
-        source,
-        sink,
+        source: source.into_inner(),
+        sink: sink.into_inner(),
     }
     .run()
     .await

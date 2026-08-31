@@ -22,7 +22,11 @@ pub struct Config {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-pub async fn run(config: &Config, source: Source<Metadata>, sink: Sink<Metadata>) -> Result<()> {
+pub async fn run(
+    config: &Config,
+    source: Mut<Source<Metadata>>,
+    sink: Mut<Sink<Metadata>>,
+) -> Result<()> {
     AutoStop {
         pause: config
             .after_pause
@@ -36,8 +40,8 @@ pub async fn run(config: &Config, source: Source<Metadata>, sink: Sink<Metadata>
 
         playing_track: None,
 
-        source,
-        sink,
+        source: source.into_inner(),
+        sink: sink.into_inner(),
     }
     .run()
     .await

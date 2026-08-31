@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{CommandFactory, FromArgMatches, ValueEnum};
+use clap::{FromArgMatches, ValueEnum};
 
 use crate::app;
 
@@ -16,66 +16,16 @@ pub enum LogLevel {
     Trace,
 }
 
-#[derive(Debug, clap::Subcommand)]
-pub enum Command {
-    #[cfg(feature = "helix")]
-    #[command(name = "hx")]
-    Helix(app::helix::Command),
-
-    #[cfg(feature = "zed")]
-    #[command(name = "zeditor")]
-    Zed(app::zed::Command),
-
-    #[cfg(feature = "music-bridge")]
-    #[command(name = "music-bridge")]
-    MusicBridge(app::music_bridge::Command),
-
-    #[cfg(feature = "lsp")]
-    #[command(name = "lsp")]
-    Lsp(app::lsp::Command),
-}
-
-impl Command {
-    pub fn name(&self) -> &str {
-        match self {
-            #[cfg(feature = "helix")]
-            Self::Helix(_) => "helix",
-
-            #[cfg(feature = "zed")]
-            Self::Zed(_) => "zed",
-
-            #[cfg(feature = "music-bridge")]
-            Self::MusicBridge(_) => "music-bridge",
-
-            #[cfg(feature = "lsp")]
-            Self::Lsp(_) => "lsp",
-
-            #[allow(unreachable_patterns)]
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn can_use_stdio_for_log(&self) -> bool {
-        let mut r = true;
-
-        #[cfg(feature = "helix")]
-        {
-            r &= !matches!(self, Self::Helix(_));
-        }
-
-        #[cfg(feature = "lsp")]
-        {
-            r &= !matches!(self, Self::Lsp(_));
-        }
-
-        r
-    }
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, clap::Parser)]
-#[command(name = env!("CARGO_BIN_NAME"), version = crate::consts::VERSION, long_version = crate::consts::LONG_VERSION, subcommand_required = true, disable_help_subcommand = true)]
+#[command(
+    name = env!("CARGO_BIN_NAME"),
+    version = crate::consts::VERSION,
+    long_version = crate::consts::LONG_VERSION,
+    disable_help_subcommand = true,
+    subcommand_required = true,
+)]
 pub struct Args {
     #[clap(
         long,
@@ -88,12 +38,13 @@ pub struct Args {
         long = "level",
         help = "Set the log level.",
         env = "RICH_PRESENCE_WRAPPER_LOG_LEVEL",
-        default_value = "info"
+        default_value = "info",
+        global = true
     )]
-    pub log_level: LogLevel,
+    pub level: LogLevel,
 
     #[clap(subcommand)]
-    pub command: Command,
+    pub command: app::Command,
 }
 
 impl Args {
@@ -103,12 +54,7 @@ impl Args {
             .subcommand_required(true)
             .disable_help_subcommand(true)
             .subcommand(<Self as clap::CommandFactory>::command())
-            .subcommands(&[
-                #[cfg(feature = "helix")]
-                app::helix::Command::command(),
-                #[cfg(feature = "zed")]
-                app::zed::Command::command(),
-            ])
+            .subcommands(app::Command::multicall_commands())
     }
 
     pub fn parse() -> Self {
@@ -121,8 +67,8 @@ impl Args {
             }
             (_, _) => Args {
                 config: None,
-                log_level: LogLevel::Off,
-                command: Command::from_arg_matches(&matches)
+                level: LogLevel::Off,
+                command: app::Command::from_arg_matches(&matches)
                     .expect("exactly one subcommand must match"),
             },
         }

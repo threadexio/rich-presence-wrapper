@@ -1,4 +1,5 @@
-use eyre::Result;
+use eyre::{Context, Result};
+use magic_args::{Extend, Mut, apply};
 use serde::Deserialize;
 
 use super::metadata::Metadata;
@@ -6,25 +7,41 @@ use super::pipeline::{Sink, Source};
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#[cfg(feature = "music-bridge.module.auto-stop")]
-pub mod auto_stop;
+macro_rules! module {
+    ($mod:ident if $cfg:meta) => {
+        #[cfg($cfg)]
+        mod $mod;
 
-#[cfg(feature = "music-bridge.module.external")]
-pub mod external;
+        #[cfg(not($cfg))]
+        mod $mod {
+            use eyre::{Result, bail};
+            use serde::Deserialize;
 
-#[cfg(feature = "music-bridge.module.filter")]
-pub mod filter;
+            #[derive(Debug, Clone, Deserialize)]
+            #[serde(rename_all = "kebab-case")]
+            pub struct Config {}
 
-#[cfg(feature = "music-bridge.module.fixup-id")]
-pub mod fixup_id;
+            pub async fn run() -> Result<()> {
+                bail!(
+                    "module is not compiled-in for this build of {}. see: `--version`",
+                    env!("CARGO_BIN_NAME")
+                )
+            }
+        }
+    };
+}
 
-#[cfg(feature = "music-bridge.module.track-position")]
-pub mod track_position;
+module!(auto_stop if feature = "music-bridge.module.auto-stop");
+module!(external if feature = "music-bridge.module.external");
+module!(filter if feature = "music-bridge.module.filter");
+module!(fixup_id if feature = "music-bridge.module.fixup-id");
+module!(track_position if feature = "music-bridge.module.track-position");
 
 #[allow(unused_imports)]
 mod prelude {
     pub(super) use super::super::metadata::Metadata;
     pub(super) use super::super::pipeline::{Sink, Source};
+    pub(super) use magic_args::Mut;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -32,47 +49,36 @@ mod prelude {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case", tag = "type")]
 pub enum Config {
-    #[cfg(feature = "music-bridge.module.auto-stop")]
     AutoStop(auto_stop::Config),
-
-    #[cfg(feature = "music-bridge.module.external")]
     External(external::Config),
-
-    #[cfg(feature = "music-bridge.module.filter")]
     Filter(filter::Config),
-
-    #[cfg(feature = "music-bridge.module.fixup-id")]
     FixupId(fixup_id::Config),
-
-    #[cfg(feature = "music-bridge.module.track-position")]
     TrackPosition(track_position::Config),
+}
+
+impl Config {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::AutoStop(_) => "auto-stop",
+            Self::External(_) => "external",
+            Self::Filter(_) => "filter",
+            Self::FixupId(_) => "fixup-id",
+            Self::TrackPosition(_) => "track-position",
+        }
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#[allow(unused_imports, unused_variables)]
 pub async fn run(config: &Config, source: Source<Metadata>, sink: Sink<Metadata>) -> Result<()> {
-    use eyre::Context;
+    let all = (config, Mut::from(source), Mut::from(sink));
 
     match config {
-        #[cfg(feature = "music-bridge.module.auto-stop")]
-        Config::AutoStop(x) => auto_stop::run(x, source, sink).await.context("auto-stop"),
-
-        #[cfg(feature = "music-bridge.module.external")]
-        Config::External(x) => external::run(x, source, sink).await.context("external"),
-
-        #[cfg(feature = "music-bridge.module.filter")]
-        Config::Filter(x) => filter::run(x, source, sink).await.context("filter"),
-
-        #[cfg(feature = "music-bridge.module.fixup-id")]
-        Config::FixupId(x) => fixup_id::run(x, source, sink).await.context("fixup-id"),
-
-        #[cfg(feature = "music-bridge.module.track-position")]
-        Config::TrackPosition(x) => track_position::run(x, source, sink)
-            .await
-            .context("track-position"),
-
-        #[allow(unreachable_patterns)]
-        _ => unreachable!(),
+        Config::AutoStop(x) => apply(auto_stop::run, all.extend(x)).await,
+        Config::External(x) => apply(external::run, all.extend(x)).await,
+        Config::Filter(x) => apply(filter::run, all.extend(x)).await,
+        Config::FixupId(x) => apply(fixup_id::run, all.extend(x)).await,
+        Config::TrackPosition(x) => apply(track_position::run, all.extend(x)).await,
     }
+    .context(config.name())
 }

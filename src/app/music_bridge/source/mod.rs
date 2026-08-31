@@ -1,4 +1,5 @@
-use eyre::Result;
+use eyre::{Context, Result};
+use magic_args::{Extend, Mut, apply};
 use module::Merge;
 use serde::Deserialize;
 
@@ -7,19 +8,40 @@ use super::pipeline::Sink;
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#[cfg(feature = "music-bridge.source.external")]
-pub mod external;
+macro_rules! source {
+    ($mod:ident if $cfg:meta) => {
+        #[cfg($cfg)]
+        mod $mod;
 
-#[cfg(feature = "music-bridge.source.file")]
-pub mod file;
+        #[cfg(not($cfg))]
+        mod $mod {
+            use eyre::{Result, bail};
+            use module::Merge;
+            use serde::Deserialize;
 
-#[cfg(feature = "music-bridge.source.playerctl")]
-pub mod playerctl;
+            #[derive(Debug, Clone, Deserialize, Merge)]
+            #[serde(rename_all = "kebab-case")]
+            pub struct Config {}
+
+            pub async fn run() -> Result<()> {
+                bail!(
+                    "source is not compiled-in for this build of {}. see: `--version`",
+                    env!("CARGO_BIN_NAME")
+                )
+            }
+        }
+    };
+}
+
+source!(external if feature = "music-bridge.source.external");
+source!(file if feature = "music-bridge.source.file");
+source!(playerctl if feature = "music-bridge.source.playerctl");
 
 #[allow(unused_imports)]
 mod prelude {
     pub(super) use super::super::metadata::Metadata;
     pub(super) use super::super::pipeline::Sink;
+    pub(super) use magic_args::Mut;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -27,17 +49,20 @@ mod prelude {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case", tag = "type")]
 pub enum Config {
-    #[cfg(feature = "music-bridge.source.external")]
     External(external::Config),
-
-    #[cfg(feature = "music-bridge.source.file")]
     File(file::Config),
-
-    #[cfg(feature = "music-bridge.source.playerctl")]
     Playerctl(playerctl::Config),
 }
 
 impl Config {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::External(_) => "external",
+            Self::File(_) => "file",
+            Self::Playerctl(_) => "playerctl",
+        }
+    }
+
     pub fn default_for_platform() -> Option<Self> {
         cfg_select! {
             all(target_os = "linux", feature = "music-bridge.source.playerctl")  => {
@@ -56,19 +81,13 @@ impl Config {
 impl Merge for Config {
     fn merge_ref(&mut self, other: Self) -> Result<(), module::Error> {
         match (self, other) {
-            #[cfg(feature = "music-bridge.source.external")]
             (Self::External(a), Self::External(b)) => a.merge_ref(b),
-            #[cfg(feature = "music-bridge.source.external")]
             (Self::External(_), _) => Err(module::Error::collision()),
 
-            #[cfg(feature = "music-bridge.source.file")]
             (Self::File(a), Self::File(b)) => a.merge_ref(b),
-            #[cfg(feature = "music-bridge.source.file")]
             (Self::File(_), _) => Err(module::Error::collision()),
 
-            #[cfg(feature = "music-bridge.source.playerctl")]
             (Self::Playerctl(a), Self::Playerctl(b)) => a.merge_ref(b),
-            #[cfg(feature = "music-bridge.source.playerctl")]
             (Self::Playerctl(_), _) => Err(module::Error::collision()),
         }
     }
@@ -76,21 +95,13 @@ impl Merge for Config {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#[allow(unused_imports, unused_variables)]
 pub async fn run(config: &Config, sink: Sink<Metadata>) -> Result<()> {
-    use eyre::Context;
+    let all = (config, Mut::from(sink));
 
     match config {
-        #[cfg(feature = "music-bridge.source.external")]
-        Config::External(x) => external::run(x, sink).await.context("external"),
-
-        #[cfg(feature = "music-bridge.source.file")]
-        Config::File(x) => file::run(x, sink).await.context("file"),
-
-        #[cfg(feature = "music-bridge.source.playerctl")]
-        Config::Playerctl(x) => playerctl::run(x, sink).await.context("playerctl"),
-
-        #[allow(unreachable_patterns)]
-        _ => unreachable!(),
+        Config::External(x) => apply(external::run, all.extend(x)).await,
+        Config::File(x) => apply(file::run, all.extend(x)).await,
+        Config::Playerctl(x) => apply(playerctl::run, all.extend(x)).await,
     }
+    .context(config.name())
 }

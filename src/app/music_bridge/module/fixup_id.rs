@@ -22,9 +22,12 @@ fn default_sensitivity_list() -> Vec<Box<str>> {
 
 pub async fn run(
     config: &Config,
-    mut source: Source<Metadata>,
-    mut sink: Sink<Metadata>,
+    source: Mut<Source<Metadata>>,
+    sink: Mut<Sink<Metadata>>,
 ) -> Result<()> {
+    let mut source = source.into_inner();
+    let mut sink = sink.into_inner();
+
     loop {
         let Some(mut metadata) = source.pull().await else {
             return Ok(());

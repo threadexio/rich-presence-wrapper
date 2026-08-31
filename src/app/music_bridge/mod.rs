@@ -3,7 +3,7 @@ use std::time::SystemTime;
 
 use ::module::Merge;
 use ::module::types::{Ordered, Overridable};
-use eyre::{Context, ContextCompat, Result};
+use eyre::{Context, ContextCompat, Result, bail};
 use serde::Deserialize;
 use tokio::task::JoinSet;
 
@@ -102,7 +102,7 @@ pub async fn run(config: &Config) -> Result<ExitCode> {
         };
 
         if let Err(e) = r {
-            error!("{e:#}");
+            bail!("{e:#}");
         }
     }
 

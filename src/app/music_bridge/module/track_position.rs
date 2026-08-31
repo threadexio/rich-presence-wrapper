@@ -14,12 +14,12 @@ pub struct Config {}
 
 ///////////////////////////////////////////////////////////////////////////////
 
-pub async fn run(_config: &Config, source: Source<Metadata>, sink: Sink<Metadata>) -> Result<()> {
+pub async fn run(source: Mut<Source<Metadata>>, sink: Mut<Sink<Metadata>>) -> Result<()> {
     TrackPosition {
         current_track: None,
 
-        source,
-        sink,
+        source: source.into_inner(),
+        sink: sink.into_inner(),
     }
     .run()
     .await
