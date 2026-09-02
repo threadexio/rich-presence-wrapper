@@ -35,6 +35,7 @@ module!(auto_stop if feature = "music-bridge.module.auto-stop");
 module!(external if feature = "music-bridge.module.external");
 module!(filter if feature = "music-bridge.module.filter");
 module!(fixup_id if feature = "music-bridge.module.fixup-id");
+module!(rewrite if feature = "music-bridge.module.rewrite");
 module!(track_position if feature = "music-bridge.module.track-position");
 
 #[allow(unused_imports)]
@@ -53,6 +54,7 @@ pub enum Config {
     External(external::Config),
     Filter(filter::Config),
     FixupId(fixup_id::Config),
+    Rewrite(rewrite::Config),
     TrackPosition(track_position::Config),
 }
 
@@ -63,6 +65,7 @@ impl Config {
             Self::External(_) => "external",
             Self::Filter(_) => "filter",
             Self::FixupId(_) => "fixup-id",
+            Self::Rewrite(_) => "rewrite",
             Self::TrackPosition(_) => "track-position",
         }
     }
@@ -78,6 +81,7 @@ pub async fn run(config: &Config, source: Source<Metadata>, sink: Sink<Metadata>
         Config::External(x) => apply(external::run, all.extend(x)).await,
         Config::Filter(x) => apply(filter::run, all.extend(x)).await,
         Config::FixupId(x) => apply(fixup_id::run, all.extend(x)).await,
+        Config::Rewrite(x) => apply(rewrite::run, all.extend(x)).await,
         Config::TrackPosition(x) => apply(track_position::run, all.extend(x)).await,
     }
 }

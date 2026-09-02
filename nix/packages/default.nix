@@ -18,6 +18,7 @@
     "external"
     "filter"
     "fixup-id"
+    "rewrite"
     "track-position"
   ],
 

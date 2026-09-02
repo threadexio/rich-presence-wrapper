@@ -26,6 +26,7 @@ music-bridge = []
 "music-bridge.module.external" = ["music-bridge", "dep:serde_json", "tokio/io-util", "tokio/process"]
 "music-bridge.module.filter" = ["music-bridge", "dep:regex"]
 "music-bridge.module.fixup-id" = ["music-bridge"]
+"music-bridge.module.rewrite" = ["music-bridge", "dep:regex"]
 "music-bridge.module.track-position" = ["music-bridge"]
 
 lsp = [
