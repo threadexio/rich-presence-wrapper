@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::mem::discriminant;
 use std::process::ExitCode;
 use std::time::SystemTime;
 
@@ -47,6 +49,8 @@ struct Module {
     #[serde(default = "default_module_order")]
     order: i64,
 
+    name: Option<String>,
+
     #[serde(flatten)]
     inner: module::Config,
 }
@@ -72,12 +76,28 @@ pub async fn run(config: &Config) -> Result<ExitCode> {
         let mut modules: Vec<_> = config.module.iter().filter(|x| x.enable).collect();
         modules.sort_by_key(|x| x.order);
 
+        let mut counts = HashMap::new();
+
         for module in modules {
+            let name = module.name.clone().unwrap_or_else(|| {
+                fn postinc(x: &mut u64) -> u64 {
+                    let old = *x;
+                    *x += 1;
+                    old
+                }
+
+                let kind = module.inner.kind();
+                let n = postinc(counts.entry(discriminant(&module.inner)).or_default());
+                format!("{kind}-{n}")
+            });
+
             let module = module.inner.clone();
             let (source, sink) = pipeline.next();
-            tasks.spawn_local(
-                async move { module::run(&module, source, sink).await.context("module") },
-            );
+            tasks.spawn_local(async move {
+                module::run(&module, source, sink)
+                    .await
+                    .with_context(|| format!("module '{}'", name))
+            });
         }
     }
 

@@ -1,4 +1,4 @@
-use eyre::{Context, Result};
+use eyre::Result;
 use magic_args::{Extend, Mut, apply};
 use serde::Deserialize;
 
@@ -57,7 +57,7 @@ pub enum Config {
 }
 
 impl Config {
-    pub fn name(&self) -> &'static str {
+    pub fn kind(&self) -> &'static str {
         match self {
             Self::AutoStop(_) => "auto-stop",
             Self::External(_) => "external",
@@ -80,5 +80,4 @@ pub async fn run(config: &Config, source: Source<Metadata>, sink: Sink<Metadata>
         Config::FixupId(x) => apply(fixup_id::run, all.extend(x)).await,
         Config::TrackPosition(x) => apply(track_position::run, all.extend(x)).await,
     }
-    .context(config.name())
 }
