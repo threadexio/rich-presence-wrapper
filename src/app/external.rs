@@ -4,7 +4,7 @@ use std::process::ExitCode;
 use eyre::{Context, Result, bail};
 use module::Merge;
 use serde::Deserialize;
-use tokio::fs::File;
+use tokio::fs;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, BufReader, Lines};
 use tokio::sync::mpsc;
 use tracing::Instrument;
@@ -43,8 +43,22 @@ pub async fn run(command: &Command) -> Result<ExitCode> {
             let path = file.display().to_string();
 
             if let Err(e) = async move {
+                let mut options = fs::OpenOptions::new();
+                options.read(true);
+
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::FileTypeExt;
+
+                    let metadata = fs::metadata(&file).await?;
+                    if metadata.file_type().is_fifo() {
+                        options.write(true);
+                    }
+                }
+
                 Source {
-                    reader: File::open(file)
+                    reader: options
+                        .open(file)
                         .await
                         .map(BufReader::new)
                         .map(Box::new)
