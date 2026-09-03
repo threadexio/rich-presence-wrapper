@@ -4,6 +4,7 @@
   lib,
   scope,
 
+  withExternal ? true,
   withHelix ? true,
   withZed ? true,
 
@@ -66,6 +67,7 @@ let
 
     buildFeatures =
       [ ]
+      ++ (lib.optional withExternal "external")
       ++ (lib.optional withHelix "helix")
       ++ (lib.optional withZed "zed")
       ++ (lib.optionals withMusicBridge (

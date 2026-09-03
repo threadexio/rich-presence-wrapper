@@ -9,12 +9,19 @@ homepage = "https://github.com/threadexio/rich-presence-wrapper"
 
 [features]
 default = [
+  "external",
   "helix",
   "zed",
   "music-bridge",
   "lsp"
 ]
 
+external = [
+  "dep:serde_json",
+  "tokio/fs",
+  "tokio/io-util",
+  "tokio/sync",
+]
 helix = []
 zed = []
 
@@ -34,6 +41,7 @@ lsp = [
   "dep:urlencoding",
   "tokio/io-std",
 ]
+
 
 [dependencies]
 clap = { version = "4.6.0", features = ["derive", "env"] }

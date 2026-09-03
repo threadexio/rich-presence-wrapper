@@ -41,15 +41,20 @@ macro_rules! app {
     };
 }
 
+app!(external if feature = "external");
 app!(helix if feature = "helix");
-app!(zed if feature = "zed");
-app!(music_bridge if feature = "music-bridge");
 app!(lsp if feature = "lsp");
+app!(music_bridge if feature = "music-bridge");
+app!(zed if feature = "zed");
 
 ///////////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
+    #[command(name = "external")]
+    #[cfg_attr(not(feature = "external"), command(hide = true))]
+    External(external::Command),
+
     #[command(name = "hx")]
     #[cfg_attr(not(feature = "helix"), command(hide = true))]
     Helix(helix::Command),
@@ -70,6 +75,7 @@ pub enum Command {
 impl Command {
     pub fn name(&self) -> &str {
         match self {
+            Self::External(_) => "external",
             Self::Helix(_) => "helix",
             Self::Zed(_) => "zed",
             Self::MusicBridge(_) => "music-bridge",
@@ -105,6 +111,7 @@ impl Command {
 #[derive(Debug, Default, Deserialize, Merge)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct Config {
+    external: external::Config,
     helix: helix::Config,
     zed: zed::Config,
     music_bridge: music_bridge::Config,
@@ -117,6 +124,8 @@ pub async fn run(command: &Command, config: &Config) -> Result<ExitCode> {
     let all = (command, config);
 
     match &command {
+        Command::External(x) => apply(external::run, all.extend(x).extend(&config.external)).await,
+
         Command::Helix(x) => apply(helix::run, all.extend(x).extend(&config.helix)).await,
 
         Command::Zed(x) => apply(zed::run, all.extend(x).extend(&config.zed)).await,
