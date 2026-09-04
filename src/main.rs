@@ -93,9 +93,12 @@ fn main() -> ExitCode {
     }
 
     match try2!({
-        let config_path = args.config.map(Ok).unwrap_or_else(Config::default_path)?;
+        let config_path = Ok(args.config).or_else(|()| Config::default_path())?;
 
-        let config = Config::read(&config_path).context("failed to read config")?;
+        let config = match config_path {
+            Some(path) => Config::read(path).context("failed to read config")?,
+            None => Config::default(),
+        };
         debug!("{config:#?}");
 
         if !args.command.can_use_stdio_for_log() {
