@@ -1,29 +1,11 @@
 {
   self,
+  stdenv,
   rustPlatform,
   lib,
   scope,
 
-  withExternal ? true,
-  withHelix ? true,
-  withZed ? true,
-
-  withMusicBridge ? true,
-  musicBridgeSources ? [
-    "external"
-    "file"
-    "playerctl"
-  ],
-  musicBridgeModules ? [
-    "auto-stop"
-    "external"
-    "filter"
-    "fixup-id"
-    "rewrite"
-    "track-position"
-  ],
-
-  withLsp ? true,
+  rpwConfig ? { },
 
   # Inputs
   python3,
@@ -35,6 +17,98 @@
 }:
 
 let
+  configType = with lib; {
+    external.enable = mkOption {
+      type = types.bool;
+      default = true;
+    };
+
+    helix.enable = mkOption {
+      type = types.bool;
+      default = true;
+    };
+
+    zed.enable = mkOption {
+      type = types.bool;
+      default = true;
+    };
+
+    music-bridge = {
+      enable = mkOption {
+        type = types.bool;
+        default = true;
+      };
+
+      source = {
+        external.enable = mkOption {
+          type = types.bool;
+          default = true;
+        };
+
+        file.enable = mkOption {
+          type = types.bool;
+          default = true;
+        };
+
+        playerctl.enable = mkOption {
+          type = types.bool;
+          default = stdenv.hostPlatform.isLinux;
+        };
+      };
+
+      module = {
+        auto-stop.enable = mkOption {
+          type = types.bool;
+          default = true;
+        };
+
+        external.enable = mkOption {
+          type = types.bool;
+          default = true;
+        };
+
+        filter.enable = mkOption {
+          type = types.bool;
+          default = true;
+        };
+
+        fixup-id.enable = mkOption {
+          type = types.bool;
+          default = true;
+        };
+
+        rewrite.enable = mkOption {
+          type = types.bool;
+          default = true;
+        };
+
+        track-position.enable = mkOption {
+          type = types.bool;
+          default = true;
+        };
+      };
+    };
+
+    lsp.enable = mkOption {
+      type = types.bool;
+      default = true;
+    };
+  };
+
+  inherit
+    (lib.evalModules {
+      modules = [
+        {
+          options = configType;
+        }
+        {
+          config = rpwConfig;
+        }
+      ];
+    })
+    config
+    ;
+
   manifest = lib.importTOML ../../Cargo.toml;
 
   rich-presence-wrapper = rustPlatform.buildRustPackage (final: {
@@ -67,24 +141,33 @@ let
 
     buildFeatures =
       [ ]
-      ++ (lib.optional withExternal "external")
-      ++ (lib.optional withHelix "helix")
-      ++ (lib.optional withZed "zed")
-      ++ (lib.optionals withMusicBridge (
+      ++ (lib.optional config.external.enable "external")
+      ++ (lib.optional config.helix.enable "helix")
+      ++ (lib.optional config.zed.enable "zed")
+      ++ (lib.optionals config.music-bridge.enable (
         [ "music-bridge" ]
-        ++ (map (source: "music-bridge.source.${source}") musicBridgeSources)
-        ++ (map (module: "music-bridge.module.${module}") musicBridgeModules)
+        ++ [
+          (lib.optional config.music-bridge.source.external.enable "music-bridge.source.external")
+          (lib.optional config.music-bridge.source.file.enable "music-bridge.source.file")
+          (lib.optional config.music-bridge.source.playerctl.enable "music-bridge.source.playerctl")
+        ]
+        ++ [
+          (lib.optional config.music-bridge.module.auto-stop.enable "music-bridge.module.auto-stop")
+          (lib.optional config.music-bridge.module.external.enable "music-bridge.module.external")
+          (lib.optional config.music-bridge.module.filter.enable "music-bridge.module.filter")
+          (lib.optional config.music-bridge.module.fixup-id.enable "music-bridge.module.fixup-id")
+          (lib.optional config.music-bridge.module.rewrite.enable "music-bridge.module.rewrite")
+          (lib.optional config.music-bridge.module.track-position.enable "music-bridge.module.track-position")
+        ]
       ))
-      ++ (lib.optional withLsp "lsp");
+      ++ (lib.optional config.lsp.enable "lsp");
 
     buildInputs =
       [ ]
-      ++ (lib.optionals withHelix [ git ])
-      ++ (lib.optionals withZed [ git ])
-      ++ (lib.optionals withMusicBridge (
-        [ ] ++ (lib.optionals (lib.elem "playerctl" musicBridgeSources) [ playerctl ])
-      ))
-      ++ (lib.optionals withLsp [ ]);
+      ++ (lib.optionals (config.helix.enable or config.zed.enable) [ git ])
+      ++ (lib.optionals config.music-bridge.enable (
+        [ ] ++ (lib.optionals config.music-bridge.source.playerctl.enable [ playerctl ])
+      ));
 
     nativeBuildInputs = [
       python3
@@ -133,17 +216,10 @@ let
         callPackage = x: extraArgs: scope.callPackage x ({ inherit rich-presence-wrapper; } // extraArgs);
       in
       {
-        inherit
-          withHelix
-          withZed
-          withMusicBridge
-          musicBridgeSources
-          musicBridgeModules
-          withLsp
-          ;
+        inherit config;
       }
-      // (lib.optionalAttrs withHelix { helix = callPackage ./helix.nix { }; })
-      // (lib.optionalAttrs withZed { zed-editor = callPackage ./zed-editor.nix { }; });
+      // (lib.optionalAttrs config.helix.enable { helix = callPackage ./helix.nix { }; })
+      // (lib.optionalAttrs config.zed.enable { zed-editor = callPackage ./zed-editor.nix { }; });
   });
 in
 
