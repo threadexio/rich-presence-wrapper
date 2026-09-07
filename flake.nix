@@ -61,6 +61,8 @@
                         helix
                         zed-editor
                         ;
+
+                      static = pkgs.pkgsStatic.scope.packages';
                     };
 
                     apps = lib.mapAttrs (_: package: {
