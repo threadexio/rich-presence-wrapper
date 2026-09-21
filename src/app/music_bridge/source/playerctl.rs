@@ -24,7 +24,7 @@ pub struct Config {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-pub async fn run(config: &Config, sink: Mut<Sink<Metadata>>) -> Result<()> {
+pub async fn run(config: &Config, sink: Mut<Sink>) -> Result<()> {
     let mut sink = sink.into_inner();
 
     let mut playerctl = Command::new(
@@ -71,7 +71,7 @@ pub async fn run(config: &Config, sink: Mut<Sink<Metadata>>) -> Result<()> {
         let metadata = parse_metadata_line(&line).context("failed to parse metadata")?;
         debug!("playerctl parsed metadata: {metadata:#?}");
 
-        if !sink.push(metadata) {
+        if sink.send(metadata).is_err() {
             break;
         }
     }

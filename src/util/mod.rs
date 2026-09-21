@@ -3,13 +3,17 @@
 use std::future::pending;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::pin::pin;
 use std::process::{Command, ExitCode, ExitStatus};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
+use std::task::{Context, Poll, Wake, Waker};
+use std::thread::{self, Thread};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use tokio::time::{Instant, sleep_until};
 
 pub mod backoff;
+pub mod spsc;
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -177,6 +181,40 @@ pub const fn r#false() -> bool {
 
 pub const fn r#true() -> bool {
     true
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+/// Block the current thread on `future`.
+///
+/// # Safety
+///
+/// `future` will be polled on the current thread by using thread parking. This
+/// function does not offer a full runtime and as such, features like timers or
+/// IO will not work.
+pub unsafe fn block_on<F>(future: F) -> F::Output
+where
+    F: Future,
+{
+    struct ParkWaker(Thread);
+
+    impl Wake for ParkWaker {
+        fn wake(self: Arc<Self>) {
+            self.0.unpark();
+        }
+    }
+
+    let mut future = pin!(future);
+
+    let waker = Waker::from(Arc::new(ParkWaker(thread::current())));
+    let mut cx = Context::from_waker(&waker);
+
+    loop {
+        match future.as_mut().poll(&mut cx) {
+            Poll::Ready(output) => break output,
+            Poll::Pending => thread::park(),
+        }
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////

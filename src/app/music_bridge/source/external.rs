@@ -22,7 +22,7 @@ pub struct Config {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-pub async fn run(config: &Config, sink: Mut<Sink<Metadata>>) -> Result<()> {
+pub async fn run(config: &Config, sink: Mut<Sink>) -> Result<()> {
     let mut sink = sink.into_inner();
 
     let command = config.command.as_deref().context("missing 'command'")?;
@@ -57,7 +57,7 @@ pub async fn run(config: &Config, sink: Mut<Sink<Metadata>>) -> Result<()> {
         let metadata = serde_json::from_str(line).context("failed to parse metadata")?;
         debug!("parsed metadata: {metadata:#?}");
 
-        if !sink.push(metadata) {
+        if sink.send(metadata).is_err() {
             break;
         }
     }

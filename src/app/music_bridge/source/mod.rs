@@ -3,8 +3,7 @@ use magic_args::{Extend, Mut, apply};
 use module::Merge;
 use serde::Deserialize;
 
-use super::metadata::Metadata;
-use super::pipeline::Sink;
+use super::Sink;
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -39,8 +38,8 @@ source!(playerctl if feature = "music-bridge.source.playerctl");
 
 #[allow(unused_imports)]
 mod prelude {
+    pub(super) use super::super::Sink;
     pub(super) use super::super::metadata::Metadata;
-    pub(super) use super::super::pipeline::Sink;
     pub(super) use magic_args::Mut;
 }
 
@@ -95,7 +94,7 @@ impl Merge for Config {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-pub async fn run(config: &Config, sink: Sink<Metadata>) -> Result<()> {
+pub async fn run(config: &Config, sink: Sink) -> Result<()> {
     let all = (config, Mut::from(sink));
 
     match config {

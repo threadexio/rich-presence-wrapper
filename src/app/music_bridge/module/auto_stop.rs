@@ -22,11 +22,7 @@ pub struct Config {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-pub async fn run(
-    config: &Config,
-    source: Mut<Source<Metadata>>,
-    sink: Mut<Sink<Metadata>>,
-) -> Result<()> {
+pub async fn run(config: &Config, source: Mut<Source>, sink: Mut<Sink>) -> Result<()> {
     AutoStop {
         pause: config
             .after_pause
@@ -52,8 +48,8 @@ struct AutoStop {
     inactivity: Option<OneshotTimer>,
     playing_track: Option<TrackInfo>,
 
-    source: Source<Metadata>,
-    sink: Sink<Metadata>,
+    source: Source,
+    sink: Sink,
 }
 
 struct TrackInfo {
@@ -69,7 +65,7 @@ impl AutoStop {
 
         loop {
             let r = tokio::select! {
-                r = self.source.pull() => {
+                r = self.source.recv() => {
                     let Some(metadata) = r else { return Ok(()); };
                     self.process_metadata(metadata)
                 }
@@ -148,7 +144,7 @@ impl AutoStop {
     }
 
     fn emit(&mut self, metadata: Metadata) -> ControlFlow<()> {
-        if self.sink.push(metadata) {
+        if self.sink.send(metadata).is_ok() {
             ControlFlow::Continue(())
         } else {
             ControlFlow::Break(())

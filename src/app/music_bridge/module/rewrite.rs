@@ -26,22 +26,18 @@ struct Rule {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-pub async fn run(
-    config: &Config,
-    source: Mut<Source<Metadata>>,
-    sink: Mut<Sink<Metadata>>,
-) -> Result<()> {
+pub async fn run(config: &Config, source: Mut<Source>, sink: Mut<Sink>) -> Result<()> {
     let mut source = source.into_inner();
     let mut sink = sink.into_inner();
 
     loop {
-        let Some(mut metadata) = source.pull().await else {
+        let Some(mut metadata) = source.recv().await else {
             return Ok(());
         };
 
         do_rewrite(&config.rules, &mut metadata);
 
-        if !sink.push(metadata) {
+        if sink.send(metadata).is_err() {
             return Ok(());
         }
     }

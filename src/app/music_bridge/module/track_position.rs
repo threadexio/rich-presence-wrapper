@@ -14,7 +14,7 @@ pub struct Config {}
 
 ///////////////////////////////////////////////////////////////////////////////
 
-pub async fn run(source: Mut<Source<Metadata>>, sink: Mut<Sink<Metadata>>) -> Result<()> {
+pub async fn run(source: Mut<Source>, sink: Mut<Sink>) -> Result<()> {
     TrackPosition {
         current_track: None,
 
@@ -28,8 +28,8 @@ pub async fn run(source: Mut<Source<Metadata>>, sink: Mut<Sink<Metadata>>) -> Re
 struct TrackPosition {
     current_track: Option<TrackInfo>,
 
-    source: Source<Metadata>,
-    sink: Sink<Metadata>,
+    source: Source,
+    sink: Sink,
 }
 
 struct TrackInfo {
@@ -45,7 +45,7 @@ struct Playing {
 impl TrackPosition {
     async fn run(&mut self) -> Result<()> {
         loop {
-            let Some(mut metadata) = self.source.pull().await else {
+            let Some(mut metadata) = self.source.recv().await else {
                 return Ok(());
             };
 
@@ -92,7 +92,7 @@ impl TrackPosition {
                 None => current_track.position,
             });
 
-            if !self.sink.push(metadata) {
+            if self.sink.send(metadata).is_err() {
                 return Ok(());
             }
         }

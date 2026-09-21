@@ -2,8 +2,7 @@ use eyre::Result;
 use magic_args::{Extend, Mut, apply};
 use serde::Deserialize;
 
-use super::metadata::Metadata;
-use super::pipeline::{Sink, Source};
+use super::{Sink, Source};
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -41,7 +40,7 @@ module!(track_position if feature = "music-bridge.module.track-position");
 #[allow(unused_imports)]
 mod prelude {
     pub(super) use super::super::metadata::Metadata;
-    pub(super) use super::super::pipeline::{Sink, Source};
+    pub(super) use super::super::{Sink, Source};
     pub(super) use magic_args::Mut;
 }
 
@@ -73,7 +72,7 @@ impl Config {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-pub async fn run(config: &Config, source: Source<Metadata>, sink: Sink<Metadata>) -> Result<()> {
+pub async fn run(config: &Config, source: Source, sink: Sink) -> Result<()> {
     let all = (config, Mut::from(source), Mut::from(sink));
 
     match config {

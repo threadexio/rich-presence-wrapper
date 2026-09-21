@@ -5,17 +5,17 @@ use std::time::Duration;
 use discord_rich_presence::error::Error as DiscordError;
 use discord_rich_presence::{DiscordIpc, DiscordIpcClient};
 use eyre::{Result, bail};
-use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use crate::util::backoff::{self, Backoff};
+use crate::util::spsc;
 
 pub use discord_rich_presence::activity::*;
 
 ///////////////////////////////////////////////////////////////////////////////
 
 pub struct Discord {
-    tx: mpsc::Sender<Message>,
+    tx: spsc::Sender<Message>,
     task: Option<JoinHandle<Result<()>>>,
 }
 
@@ -43,7 +43,8 @@ where
         let Self { client_id } = self;
         let client_id = client_id.as_ref();
 
-        let (tx, rx) = mpsc::channel(16);
+        let (tx, rx) = spsc::new();
+
         let inner = DiscordIpcClient::new(client_id);
         let task = tokio::task::spawn_blocking(move || Task { inner, rx }.run());
 
@@ -68,7 +69,7 @@ impl Discord {
     }
 
     async fn send(&mut self, m: Message) -> Result<()> {
-        match self.tx.send(m).await {
+        match self.tx.send(m) {
             Ok(()) => Ok(()),
 
             Err(_) => match self.task.take() {
@@ -88,7 +89,7 @@ enum Message {
 
 struct Task {
     inner: DiscordIpcClient,
-    rx: mpsc::Receiver<Message>,
+    rx: spsc::Receiver<Message>,
 }
 
 impl Task {
@@ -109,7 +110,6 @@ impl Task {
     }
 
     fn handle_set_activity(&mut self, activity: Box<Activity<'static>>) -> Result<()> {
-        trace!("set activity");
         self.execute(|me| me.inner.set_activity(*activity.clone()))
     }
 
@@ -123,29 +123,19 @@ impl Task {
             match f(self) {
                 Ok(output) => return Ok(output),
 
-                Err(
-                    e @ (DiscordError::NotConnected
-                    | DiscordError::IPCConnectionFailed
-                    | DiscordError::IPCNotFound
-                    | DiscordError::ReadError(_)
-                    | DiscordError::WriteError(_)
-                    | DiscordError::FlushError(_)),
-                ) => {
+                Err(e) if is_retryable(&e) => {
                     debug!("ipc error: {e}");
                     self.reconnect()?;
                 }
 
-                Err(
-                    e @ (DiscordError::DecodeOpcode
-                    | DiscordError::DecodeHeader
-                    | DiscordError::RecvUtf8Response
-                    | DiscordError::JsonParseResponse),
-                ) => return Err(e.into()),
+                Err(e) => return Err(e.into()),
             }
         }
     }
 
     fn reconnect(&mut self) -> Result<()> {
+        let _ = self.inner.close();
+
         let mut backoff = Backoff::new(backoff::Max::new(
             Duration::from_secs(10),
             backoff::Min::new(Duration::from_secs(1), backoff::Exponential::new(1.5)),
@@ -156,14 +146,26 @@ impl Task {
             trace!("reconnection attempt #{i}");
             i += 1;
 
-            let _ = self.inner.close();
             match self.inner.connect() {
-                Ok(()) => return Ok(()),
-                Err(DiscordError::IPCNotFound | DiscordError::IPCConnectionFailed) => {
-                    backoff.blocking_sleep()
+                Ok(()) => {
+                    trace!("connected");
+                    break Ok(());
                 }
-                Err(e) => return Err(e.into()),
+                Err(e) if is_retryable(&e) => backoff.blocking_sleep(),
+                Err(e) => break Err(e.into()),
             }
         }
     }
+}
+
+fn is_retryable(err: &DiscordError) -> bool {
+    matches!(
+        err,
+        DiscordError::NotConnected
+            | DiscordError::IPCConnectionFailed
+            | DiscordError::IPCNotFound
+            | DiscordError::ReadError(_)
+            | DiscordError::WriteError(_)
+            | DiscordError::FlushError(_)
+    )
 }

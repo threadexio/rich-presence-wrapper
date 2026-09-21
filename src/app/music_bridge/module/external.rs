@@ -21,11 +21,7 @@ pub struct Config {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-pub async fn run(
-    config: &Config,
-    source: Mut<Source<Metadata>>,
-    sink: Mut<Sink<Metadata>>,
-) -> Result<()> {
+pub async fn run(config: &Config, source: Mut<Source>, sink: Mut<Sink>) -> Result<()> {
     let command = config.command.as_deref().context("missing 'command'")?;
 
     let mut child = Command::new(command)
@@ -62,20 +58,20 @@ struct External {
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
 
-    source: Source<Metadata>,
-    sink: Sink<Metadata>,
+    source: Source,
+    sink: Sink,
 }
 
 impl External {
     async fn run(&mut self) -> Result<()> {
         loop {
-            let Some(metadata) = self.source.pull().await else {
+            let Some(metadata) = self.source.recv().await else {
                 return Ok(());
             };
 
             let metadata = self.process_metadata(metadata).await?;
 
-            if !self.sink.push(metadata) {
+            if self.sink.send(metadata).is_err() {
                 return Ok(());
             }
         }

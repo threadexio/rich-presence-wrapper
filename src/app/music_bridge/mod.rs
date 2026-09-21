@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::mem::discriminant;
+use std::mem::{discriminant, replace};
 use std::process::ExitCode;
 use std::time::SystemTime;
 
@@ -10,15 +10,16 @@ use serde::Deserialize;
 use tokio::task::JoinSet;
 
 use crate::discord::*;
-use crate::util::{SystemTimeExt, capitalize_words};
+use crate::util::{SystemTimeExt, capitalize_words, spsc};
 
 mod metadata;
 mod module;
-mod pipeline;
 mod source;
 
 use self::metadata::{Metadata, TrackStatus};
-use self::pipeline::{Pipeline, Source};
+
+type Sink = spsc::Sender<Metadata>;
+type Source = spsc::Receiver<Metadata>;
 
 const CLIENT_ID: &str = "1485616471035088896";
 
@@ -129,9 +130,27 @@ pub async fn run(config: &Config) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-async fn run_rpc(mut discord: Discord, mut source: Source<Metadata>) -> Result<()> {
+struct Pipeline {
+    input: Sink,
+    output: Source,
+}
+
+impl Pipeline {
+    fn new() -> Self {
+        let (input, output) = spsc::new();
+        Self { input, output }
+    }
+
+    fn next(&mut self) -> (Source, Sink) {
+        let (input, output) = spsc::new();
+        let output = replace(&mut self.output, output);
+        (output, input)
+    }
+}
+
+async fn run_rpc(mut discord: Discord, mut source: Source) -> Result<()> {
     loop {
-        let Some(metadata) = source.pull().await else {
+        let Some(metadata) = source.recv().await else {
             return Ok(());
         };
 

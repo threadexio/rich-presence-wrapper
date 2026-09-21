@@ -20,23 +20,19 @@ fn default_sensitivity_list() -> Vec<Box<str>> {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-pub async fn run(
-    config: &Config,
-    source: Mut<Source<Metadata>>,
-    sink: Mut<Sink<Metadata>>,
-) -> Result<()> {
+pub async fn run(config: &Config, source: Mut<Source>, sink: Mut<Sink>) -> Result<()> {
     let mut source = source.into_inner();
     let mut sink = sink.into_inner();
 
     loop {
-        let Some(mut metadata) = source.pull().await else {
+        let Some(mut metadata) = source.recv().await else {
             return Ok(());
         };
 
         let hash = hash_metadata(&metadata, &config.sensitivity);
         metadata.id = format!("<{hash:016x}>");
 
-        if !sink.push(metadata) {
+        if sink.send(metadata).is_err() {
             return Ok(());
         }
     }
