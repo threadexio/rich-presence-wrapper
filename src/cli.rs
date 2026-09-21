@@ -31,6 +31,8 @@ pub struct Args {
     #[clap(
         long,
         help = "Specify an alternate configuration file.",
+        value_name = "path",
+        global = true,
         env = "RICH_PRESENCE_WRAPPER_CONFIG"
     )]
     pub config: Option<PathBuf>,
