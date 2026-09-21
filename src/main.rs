@@ -5,14 +5,13 @@ use std::fs;
 use std::io;
 use std::process::ExitCode;
 
-use eyre::{Context, ContextCompat, Result};
+use eyre::{Context, Result};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::cli::Args;
 use crate::config::Config;
-use crate::util::cache_dir;
 
 #[macro_use]
 mod util;
@@ -29,7 +28,7 @@ mod platform;
 fn main() -> ExitCode {
     let args = Args::parse();
 
-    let level_filter_layer = match args.level {
+    let level_filter_layer = match args.log_level {
         cli::LogLevel::Off => LevelFilter::OFF,
         cli::LogLevel::Error => LevelFilter::ERROR,
         cli::LogLevel::Warn => LevelFilter::WARN,
@@ -38,8 +37,11 @@ fn main() -> ExitCode {
         cli::LogLevel::Trace => LevelFilter::TRACE,
     };
 
-    let (console_fmt_layer, console_fmt_handle) =
-        tracing_subscriber::reload::Layer::new(Some(tracing_subscriber::fmt::layer().compact()));
+    let (console_fmt_layer, console_fmt_handle) = tracing_subscriber::reload::Layer::new(Some(
+        tracing_subscriber::fmt::layer()
+            .compact()
+            .with_writer(io::stderr),
+    ));
 
     let (log_file_fmt_layer, log_file_fmt_handle) = tracing_subscriber::reload::Layer::new(None);
 
@@ -51,44 +53,28 @@ fn main() -> ExitCode {
 
     debug!("{args:#?}");
 
-    if let Err(e) = try2!({
-        let cache_dir = cache_dir()
-            .map(|x| x.join(env!("CARGO_BIN_NAME")))
-            .context("cache directory not set")?;
+    if let Some(log_file) = args.log_file.as_ref()
+        && let Err(e) = try2!({
+            let writer = fs::File::options()
+                .append(true)
+                .create(true)
+                .open(log_file)
+                .with_context(|| log_file.display().to_string())?;
 
-        match fs::create_dir(&cache_dir) {
-            Ok(()) => {}
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
-            Err(e) => {
-                return Err(e).with_context(|| {
-                    format!("failed to create directory '{}'", cache_dir.display())
-                });
-            }
-        }
+            log_file_fmt_handle
+                .modify(|layer| {
+                    *layer = Some(
+                        tracing_subscriber::fmt::layer()
+                            .compact()
+                            .with_ansi(false)
+                            .with_writer(writer),
+                    );
+                })
+                .expect("subscriber should still exist");
 
-        let log_file_path = cache_dir
-            .as_path()
-            .join(format!("{}.log", args.command.name()));
-
-        let log_file = fs::File::options()
-            .append(true)
-            .create(true)
-            .open(&log_file_path)
-            .with_context(|| format!("failed to open log file '{}'", log_file_path.display()))?;
-
-        log_file_fmt_handle
-            .modify(|layer| {
-                *layer = Some(
-                    tracing_subscriber::fmt::layer()
-                        .compact()
-                        .with_ansi(false)
-                        .with_writer(log_file),
-                );
-            })
-            .expect("subscriber should still exist");
-
-        Result::<()>::Ok(())
-    }) {
+            Result::<()>::Ok(())
+        })
+    {
         warn!("{e:#}");
     }
 
@@ -99,6 +85,7 @@ fn main() -> ExitCode {
             Some(path) => Config::read(path).context("failed to read config")?,
             None => Config::default(),
         };
+
         debug!("{config:#?}");
 
         if !args.command.can_use_stdio_for_log() {
@@ -107,10 +94,7 @@ fn main() -> ExitCode {
                 .expect("subscriber should still exist");
         }
 
-        let rt = tokio::runtime::LocalRuntime::new().unwrap();
-        let r = rt.block_on(app::run(&args.command, &config.app));
-        rt.shutdown_background();
-        r
+        run_local(app::run(&args.command, &config.app))
     }) {
         Ok(code) => code,
         Err(e) => {
@@ -118,4 +102,14 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+fn run_local<F>(future: F) -> F::Output
+where
+    F: Future,
+{
+    let rt = tokio::runtime::LocalRuntime::new().unwrap();
+    let output = rt.block_on(future);
+    rt.shutdown_background();
+    output
 }

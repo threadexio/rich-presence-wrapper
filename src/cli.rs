@@ -23,6 +23,7 @@ pub enum LogLevel {
     name = env!("CARGO_BIN_NAME"),
     version = crate::consts::VERSION,
     long_version = crate::consts::LONG_VERSION,
+    about = env!("CARGO_PKG_DESCRIPTION"),
     disable_help_subcommand = true,
     subcommand_required = true,
 )]
@@ -37,11 +38,21 @@ pub struct Args {
     #[clap(
         long = "level",
         help = "Set the log level.",
-        env = "RICH_PRESENCE_WRAPPER_LOG_LEVEL",
+        value_name = "level",
         default_value = "info",
-        global = true
+        global = true,
+        env = "RICH_PRESENCE_WRAPPER_LOG_LEVEL"
     )]
-    pub level: LogLevel,
+    pub log_level: LogLevel,
+
+    #[clap(
+        long = "log",
+        help = "Set the path to the log file.",
+        value_name = "path",
+        global = true,
+        env = "RICH_PRESENCE_WRAPPER_LOG_FILE"
+    )]
+    pub log_file: Option<PathBuf>,
 
     #[clap(subcommand)]
     pub command: app::Command,
@@ -67,7 +78,8 @@ impl Args {
             }
             (_, _) => Args {
                 config: None,
-                level: LogLevel::Off,
+                log_level: LogLevel::Off,
+                log_file: None,
                 command: app::Command::from_arg_matches(&matches)
                     .expect("exactly one subcommand must match"),
             },
