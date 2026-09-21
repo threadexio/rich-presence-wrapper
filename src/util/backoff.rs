@@ -40,13 +40,17 @@ where
 
 ///////////////////////////////////////////////////////////////////////////////
 
-pub trait Strategy: PrivateStrategy {}
-impl<T> Strategy for T where T: PrivateStrategy {}
+mod private {
+    use super::*;
 
-trait PrivateStrategy {
-    fn tick(&mut self) -> Duration;
-    fn reset(&mut self);
+    pub trait Strategy {
+        fn tick(&mut self) -> Duration;
+        fn reset(&mut self);
+    }
 }
+
+pub trait Strategy: private::Strategy {}
+impl<T> Strategy for T where T: private::Strategy {}
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -62,7 +66,7 @@ impl Exponential {
     }
 }
 
-impl PrivateStrategy for Exponential {
+impl private::Strategy for Exponential {
     fn tick(&mut self) -> Duration {
         let t = Duration::from_secs_f32(self.base.powf(self.factor));
         self.factor += 1.0;
@@ -88,7 +92,7 @@ impl<S> Min<S> {
     }
 }
 
-impl<S> PrivateStrategy for Min<S>
+impl<S> private::Strategy for Min<S>
 where
     S: Strategy,
 {
@@ -115,7 +119,7 @@ impl<S> Max<S> {
     }
 }
 
-impl<S> PrivateStrategy for Max<S>
+impl<S> private::Strategy for Max<S>
 where
     S: Strategy,
 {
