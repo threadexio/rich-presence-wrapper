@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use std::cmp::min;
 use std::future::pending;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -9,6 +8,8 @@ use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use tokio::time::{Instant, sleep_until};
+
+pub mod backoff;
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -24,34 +25,6 @@ pub trait SystemTimeExt {
 impl SystemTimeExt for SystemTime {
     fn duration_since_epoch(&self) -> Duration {
         self.duration_since(UNIX_EPOCH).unwrap()
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-pub struct Backoff {
-    delay: Duration,
-    max: Duration,
-    factor: f32,
-}
-
-impl Backoff {
-    pub fn new(initial: Duration, max: Duration, factor: f32) -> Self {
-        Self {
-            delay: initial,
-            max,
-            factor,
-        }
-    }
-
-    pub fn advance(&mut self) {
-        let new_delay = self.delay.mul_f32(self.factor);
-        self.delay = min(self.max, new_delay);
-    }
-
-    pub fn blocking_sleep(&mut self) {
-        std::thread::sleep(self.delay);
-        self.advance();
     }
 }
 

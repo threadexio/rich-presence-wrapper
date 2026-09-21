@@ -109,7 +109,5 @@ where
     F: Future,
 {
     let rt = tokio::runtime::LocalRuntime::new().unwrap();
-    let output = rt.block_on(future);
-    rt.shutdown_background();
-    output
+    rt.block_on(future)
 }

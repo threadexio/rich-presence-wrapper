@@ -5,14 +5,28 @@ use std::time::Duration;
 use discord_rich_presence::error::Error as DiscordError;
 use discord_rich_presence::{DiscordIpc, DiscordIpcClient};
 use eyre::{Result, bail};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
+
+use crate::util::backoff::{self, Backoff};
 
 pub use discord_rich_presence::activity::*;
 
-use crate::util::{Backoff, Never};
+///////////////////////////////////////////////////////////////////////////////
+
+pub struct Discord {
+    tx: mpsc::Sender<Message>,
+    task: Option<JoinHandle<Result<()>>>,
+}
 
 pub struct Builder<ClientId> {
     pub client_id: ClientId,
+}
+
+impl Discord {
+    pub fn builder() -> Builder<()> {
+        Builder { client_id: () }
+    }
 }
 
 impl<ClientId> Builder<ClientId> {
@@ -30,93 +44,77 @@ where
         let client_id = client_id.as_ref();
 
         let (tx, rx) = mpsc::channel(16);
-        let (error_tx, error_rx) = oneshot::channel();
-
-        let mut task = DiscordTask {
-            inner: DiscordIpcClient::new(client_id),
-            rx,
-        };
-
-        tokio::task::spawn_blocking(move || {
-            let err = task.run().unwrap_err();
-            let _ = error_tx.send(err);
-        });
+        let inner = DiscordIpcClient::new(client_id);
+        let task = tokio::task::spawn_blocking(move || Task { inner, rx }.run());
 
         Discord {
             tx,
-            error: Some(error_rx),
+            task: Some(task),
         }
     }
 }
 
-pub struct Discord {
-    tx: mpsc::Sender<DiscordMessage>,
-    error: Option<oneshot::Receiver<eyre::Error>>,
-}
-
 impl Discord {
-    pub fn builder() -> Builder<()> {
-        Builder { client_id: () }
-    }
-
     pub async fn set_activity(
         &mut self,
         activity: impl Into<Box<Activity<'static>>>,
     ) -> Result<()> {
         let activity = activity.into();
-        self.send(DiscordMessage::SetActivity { activity }).await
+        self.send(Message::SetActivity { activity }).await
     }
 
     pub async fn clear_activity(&mut self) -> Result<()> {
-        self.send(DiscordMessage::ClearActivity).await
+        self.send(Message::ClearActivity).await
     }
 
-    async fn send(&mut self, m: DiscordMessage) -> Result<()> {
-        let Err(_) = self.tx.send(m).await else {
-            return Ok(());
-        };
+    async fn send(&mut self, m: Message) -> Result<()> {
+        match self.tx.send(m).await {
+            Ok(()) => Ok(()),
 
-        let error = self.error.take().expect("error thrown previously");
-        let error = error
-            .await
-            .expect("a dead IPC task should always return an error");
-
-        Err(error)
+            Err(_) => match self.task.take() {
+                Some(task) => task.await.map_err(Into::into).flatten(),
+                None => bail!("errored previously"),
+            },
+        }
     }
 }
 
-enum DiscordMessage {
+///////////////////////////////////////////////////////////////////////////////
+
+enum Message {
     SetActivity { activity: Box<Activity<'static>> },
     ClearActivity,
 }
 
-struct DiscordTask {
+struct Task {
     inner: DiscordIpcClient,
-    rx: mpsc::Receiver<DiscordMessage>,
+    rx: mpsc::Receiver<Message>,
 }
 
-impl DiscordTask {
-    fn run(&mut self) -> Result<Never> {
+impl Task {
+    fn run(&mut self) -> Result<()> {
         loop {
             match self.rx.blocking_recv() {
-                Some(DiscordMessage::SetActivity { activity }) => {
+                Some(Message::SetActivity { activity }) => {
                     self.handle_set_activity(activity)?;
                 }
 
-                Some(DiscordMessage::ClearActivity) => {
+                Some(Message::ClearActivity) => {
                     self.handle_clear_activity()?;
                 }
 
-                None => bail!("ipc closed"),
+                None => return Ok(()),
             }
         }
     }
 
     fn handle_set_activity(&mut self, activity: Box<Activity<'static>>) -> Result<()> {
+        trace!("set activity");
         self.execute(|me| me.inner.set_activity(*activity.clone()))
     }
 
     fn handle_clear_activity(&mut self) -> Result<()> {
+        trace!("clear activity");
         self.execute(|me| me.inner.clear_activity())
     }
 
@@ -126,31 +124,39 @@ impl DiscordTask {
                 Ok(output) => return Ok(output),
 
                 Err(
-                    DiscordError::NotConnected
+                    e @ (DiscordError::NotConnected
                     | DiscordError::IPCConnectionFailed
-                    | DiscordError::IPCNotFound,
+                    | DiscordError::IPCNotFound
+                    | DiscordError::ReadError(_)
+                    | DiscordError::WriteError(_)
+                    | DiscordError::FlushError(_)),
                 ) => {
-                    self.connect()?;
+                    debug!("ipc error: {e}");
+                    self.reconnect()?;
                 }
 
                 Err(
-                    DiscordError::ReadError(_)
-                    | DiscordError::WriteError(_)
-                    | DiscordError::FlushError(_),
-                ) => {
-                    let _ = self.inner.close();
-                    self.connect()?;
-                }
-
-                Err(e) => return Err(e.into()),
+                    e @ (DiscordError::DecodeOpcode
+                    | DiscordError::DecodeHeader
+                    | DiscordError::RecvUtf8Response
+                    | DiscordError::JsonParseResponse),
+                ) => return Err(e.into()),
             }
         }
     }
 
-    fn connect(&mut self) -> Result<()> {
-        let mut backoff = Backoff::new(Duration::from_secs(5), Duration::from_secs(30), 1.5);
+    fn reconnect(&mut self) -> Result<()> {
+        let mut backoff = Backoff::new(backoff::Max::new(
+            Duration::from_secs(10),
+            backoff::Min::new(Duration::from_secs(1), backoff::Exponential::new(1.5)),
+        ));
 
+        let mut i: u64 = 1;
         loop {
+            trace!("reconnection attempt #{i}");
+            i += 1;
+
+            let _ = self.inner.close();
             match self.inner.connect() {
                 Ok(()) => return Ok(()),
                 Err(DiscordError::IPCNotFound | DiscordError::IPCConnectionFailed) => {
